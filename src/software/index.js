@@ -251,7 +251,8 @@ async function installWhisper() {
 // Whisper on the GPU (Windows): Const-me's Whisper command line (main.exe and Whisper.dll, the
 // engine behind Whisper Desktop). It runs ggml models through DirectCompute on any DirectX 11
 // GPU, Intel Arc included. Models come from WHISPER_MODELS_DIR (such as Whisper Desktop's
-// folder), else Software/Whisper-GPU/models, where the installer puts ggml-base.en if empty.
+// folder) and Software/Whisper-GPU/models, where the installer adds ggml-base.en if there is
+// no base model. The engine cannot load quantized models (ggml-*-q8_0.bin), so they are skipped.
 const WHISPER_GPU_URL = () => config.get('WHISPER_GPU_URL', 'https://github.com/Const-me/Whisper/releases/download/1.12.0/cli.zip');
 const WHISPER_GPU_MODEL = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin';
 
@@ -269,10 +270,12 @@ function findFile(dir, name, depth = 3) {
 }
 
 export const whisperGpuExe = () => findFile(path.join(SOFTWARE.whisperGpu, 'cli'), 'main.exe');
-export const whisperModelsDir = () => config.get('WHISPER_MODELS_DIR') || path.join(SOFTWARE.whisperGpu, 'models');
+const ownModels = () => path.join(SOFTWARE.whisperGpu, 'models');
 export function whisperGpuModels() {
-  const dir = whisperModelsDir();
-  return fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => /^ggml-.+\.bin$/i.test(f)).map((f) => path.join(dir, f)) : [];
+  const dirs = [...new Set([config.get('WHISPER_MODELS_DIR'), ownModels()].filter(Boolean))];
+  return dirs.flatMap((dir) => (fs.existsSync(dir) ? fs.readdirSync(dir) : [])
+    .filter((f) => /^ggml-.+\.bin$/i.test(f) && !/-q\d/i.test(f))
+    .map((f) => path.join(dir, f)));
 }
 
 async function installWhisperGpu() {
@@ -287,8 +290,8 @@ async function installWhisperGpu() {
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
-  if (!whisperGpuModels().length) {
-    await download(WHISPER_GPU_MODEL, path.join(SOFTWARE.whisperGpu, 'models', 'ggml-base.en.bin'));
+  if (!whisperGpuModels().some((m) => /^ggml-base/i.test(path.basename(m)))) {
+    await download(WHISPER_GPU_MODEL, path.join(ownModels(), 'ggml-base.en.bin'));
   }
   log.ok('Installed GPU Whisper into Software/Whisper-GPU', { exe: whisperGpuExe(), models: whisperGpuModels().map((m) => path.basename(m)) });
 }

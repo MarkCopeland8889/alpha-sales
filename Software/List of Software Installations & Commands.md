@@ -72,9 +72,10 @@ elsewhere). Each model downloads on first use to `~/.cache/whisper`.
 `node src/cli.js install whisper-gpu`. Downloads Const-me's Whisper command line (`main.exe` and
 `Whisper.dll`, the engine behind Whisper Desktop) into `Software/Whisper-GPU/cli`. It runs ggml
 models through DirectX 11 on any GPU, Intel Arc included. Set `WHISPER_MODELS_DIR` in Settings
-to an existing folder of `ggml-*.bin` models (such as Whisper Desktop's); otherwise
-`ggml-base.en.bin` is downloaded into `Software/Whisper-GPU/models`. `WHISPER_GPU_URL`
-overrides the download link.
+to an existing folder of `ggml-*.bin` models (such as Whisper Desktop's); its models are used
+alongside `Software/Whisper-GPU/models`, where `ggml-base.en.bin` is downloaded if there is no
+base model. This engine cannot load quantized models (`ggml-*-q8_0.bin`, `-q5_1`), so those are
+skipped. `WHISPER_GPU_URL` overrides the download link.
 
 **Transcribing.** `node src/cli.js transcribe <file> [--model base] [--language en] [--cpu|--gpu]`
 uses GPU Whisper when it is installed, else the CPU copy, and prints the text with the engine

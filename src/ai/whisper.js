@@ -37,7 +37,7 @@ export function pickModel(files, name) {
 async function onGpu(file, { model, language }) {
   const models = whisperGpuModels();
   const modelFile = pickModel(models, model);
-  if (!modelFile) throw new Error(`No ggml model named "${model}" for GPU Whisper. Available: ${models.map((m) => path.basename(m)).join(', ') || 'none'}`);
+  if (!modelFile) throw new Error(`No ggml model named "${model}" for GPU Whisper (quantized -q models do not load on it). Available: ${models.map((m) => path.basename(m)).join(', ') || 'none'}. Run Software > Whisper on the GPU to add ggml-base.en.`);
   const exe = whisperGpuExe();
   const res = await run(exe, ['-m', modelFile, '-f', file, '-l', language], { cwd: path.dirname(exe), timeout: 60 * 60000 });
   if (!res.ok) throw new Error(`GPU Whisper failed (exit ${res.code}): ${(res.stderr || res.stdout).slice(-800)}`);
