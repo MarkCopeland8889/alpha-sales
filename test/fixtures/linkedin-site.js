@@ -61,6 +61,30 @@ const peopleCard = (slug) => {
   <div>${esc(p.headline)}</div><div>${esc(p.location)}</div><button onclick="hit('connect')">Connect</button></div></li>`;
 };
 
+// The 2026 search page: obfuscated classes, [role="listitem"] cards, the whole card wrapped in
+// one link with the name in a smaller link inside it (built by script, as LinkedIn does, since
+// HTML cannot nest links), an "is open to work" photo label and a mutual-connection link.
+const sduiPeople = (slugs) => `<div data-sdui-screen="com.linkedin.sdui.flagshipnav.search.SearchResultsPeople"><div role="list" id="sdui"></div></div><div class="spacer"></div>`;
+const sduiScript = (slugs) => `
+const el = (tag, text) => { const e = document.createElement(tag); if (text) e.textContent = text; return e; };
+for (const c of ${JSON.stringify(slugs.map((slug) => ({ slug, ...PEOPLE[slug] })))}) {
+  const item = el('div'); item.setAttribute('role', 'listitem'); item.className = 'gfllid gflanj';
+  const wrap = el('div'); wrap.setAttribute('data-display-contents', 'true');
+  const card = el('a'); card.href = '/in/' + c.slug + '/';
+  const label = el('div', c.name + ' is open to work');
+  const body = el('div');
+  const p = el('p'); const name = el('a', c.name); name.href = '/in/' + c.slug + '/'; p.append(name, el('span', ' • 2nd'));
+  const head = el('div'); head.append(el('p')); head.firstChild.append(el('span', c.headline));
+  const loc = el('div'); loc.append(el('p')); loc.firstChild.append(el('span', c.location));
+  body.append(p, head, loc);
+  card.append(label, body);
+  const pile = el('div'); const mutual = el('a', 'Zed Mutual'); mutual.href = '/in/zed-mutual/';
+  const connect = el('button', 'Connect'); connect.onclick = () => hit('connect');
+  pile.append(mutual, el('span', ' is a mutual connection'), connect);
+  wrap.append(card, pile); item.append(wrap);
+  document.getElementById('sdui').append(item);
+}`;
+
 function profilePage(slug) {
   const p = PEOPLE[slug];
   return layout(p.name, `
@@ -223,7 +247,9 @@ export function startLinkedInSite(port) {
     if (u.pathname === '/search/results/people/') {
       const n = Number(u.searchParams.get('page') || 1);
       const slugs = SEARCH_PAGES[n - 1];
-      return send(slugs ? layout('People search', `<ul>${slugs.map(peopleCard).join('')}</ul><div class="spacer"></div>`) : layout('People search', '<h2>No results found</h2>'));
+      if (!slugs) return send(layout('People search', '<h2>No results found</h2>'));
+      // Page 1 uses the classic layout, page 2 the 2026 one.
+      return send(n === 2 ? layout('People search', sduiPeople(slugs), sduiScript(slugs)) : layout('People search', `<ul>${slugs.map(peopleCard).join('')}</ul><div class="spacer"></div>`));
     }
     if (u.pathname === '/search/results/content/') return send(contentSearch());
     if (u.pathname === '/search/results/groups/') return send(groupsSearch(Number(u.searchParams.get('page') || 1)));

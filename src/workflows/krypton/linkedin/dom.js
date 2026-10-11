@@ -83,9 +83,14 @@ export function peopleResults(sel) {
     }
     if (!card || cards.has(card)) continue;
     const slug = decodeURIComponent(m[1]);
-    const nameSpan = a.querySelector('span[aria-hidden="true"]');
-    let name = lines(nameSpan || a)[0] || '';
-    if (!name || /^view\b/i.test(name) || name.length > 120) name = lines(card)[0] || slug;
+    // The name is the shortest first line among the card's links to this person: the newer
+    // layout wraps the whole card in one link, with the bare name in a smaller link inside it.
+    const names = [a, ...card.querySelectorAll('a[href*="/in/"]')]
+      .filter((x) => (x.href.match(/\/in\/([^/?#]+)/) || [])[1] === m[1])
+      .map((x) => lines(x.querySelector('span[aria-hidden="true"]') || x)[0] || '')
+      .filter((n) => n && !/^view\b/i.test(n) && n.length <= 120)
+      .sort((x, y) => x.length - y.length);
+    const name = names[0] || lines(card)[0] || slug;
     const text = [...new Set(lines(card))].filter((l) => !/^(connect|message|follow|view .*profile)$/i.test(l)).join('\n');
     cards.set(card, { slug, name, url: `${location.origin}/in/${slug}/`, text: text.slice(0, 1500) });
   }

@@ -46,6 +46,7 @@ export const SOFTWARE = {
   invisible: at('Software', 'Invisible-Playwright'),
   rclone: at('Software', 'rclone'),
   whisper: at('Software', 'Whisper'),
+  whisperGpu: at('Software', 'Whisper-GPU'),
   sevenZip: at('Software', '7zip'),
 };
 

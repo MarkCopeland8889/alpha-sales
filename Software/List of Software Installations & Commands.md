@@ -68,6 +68,18 @@ since Whisper calls it by name. Run it with the launcher, which puts both on PAT
 `Software/Whisper/whisper.cmd audio.mp3 --model turbo` on Windows (`Software/Whisper/whisper`
 elsewhere). Each model downloads on first use to `~/.cache/whisper`.
 
+**Whisper on the GPU (Windows).** Software page → Whisper on the GPU, or
+`node src/cli.js install whisper-gpu`. Downloads Const-me's Whisper command line (`main.exe` and
+`Whisper.dll`, the engine behind Whisper Desktop) into `Software/Whisper-GPU/cli`. It runs ggml
+models through DirectX 11 on any GPU, Intel Arc included. Set `WHISPER_MODELS_DIR` in Settings
+to an existing folder of `ggml-*.bin` models (such as Whisper Desktop's); otherwise
+`ggml-base.en.bin` is downloaded into `Software/Whisper-GPU/models`. `WHISPER_GPU_URL`
+overrides the download link.
+
+**Transcribing.** `node src/cli.js transcribe <file> [--model base] [--language en] [--cpu|--gpu]`
+uses GPU Whisper when it is installed, else the CPU copy, and prints the text with the engine
+and time taken. Code can call `transcribe()` from `src/ai/whisper.js`.
+
 ## Extension Copies
 
 Put unpacked extensions (or `.crx`/`.zip`) in `Software/Extension Copies/Chrome` and `.xpi`

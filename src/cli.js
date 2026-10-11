@@ -6,6 +6,7 @@
 //   node src/cli.js software           show what is installed
 //   node src/cli.js sync               run the Google Drive sync now
 //   node src/cli.js status             show version, machine and login
+//   node src/cli.js transcribe <file> [--model base] [--language en] [--cpu|--gpu]   Whisper speech to text
 import './core/env.js';
 import { spawn } from 'node:child_process';
 import { ensureFolders } from './core/paths.js';
@@ -77,8 +78,19 @@ async function main() {
       console.log({ version: v.full, device: m.deviceName, machineId: m.machineId, user: user?.email ?? null, db: config.useSupabase ? 'supabase' : 'local' });
       break;
     }
+    case 'transcribe': {
+      const { transcribe } = await import('./ai/whisper.js');
+      const opt = (name, d) => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : d; };
+      const file = args.find((a, i) => !a.startsWith('--') && !['--model', '--language'].includes(args[i - 1]));
+      if (!file) throw new Error('Usage: node src/cli.js transcribe <file> [--model base] [--language en] [--cpu|--gpu]');
+      const engine = args.includes('--gpu') ? 'gpu' : args.includes('--cpu') ? 'cpu' : 'auto';
+      const res = await transcribe(file, { model: opt('model', 'base'), language: opt('language', 'en'), engine });
+      console.log(res.text);
+      console.error(`\n(${res.engine.toUpperCase()} Whisper, ${res.model}, ${(res.ms / 1000).toFixed(1)}s, ${res.segments.length} segments)`);
+      break;
+    }
     default:
-      console.log('Usage: node src/cli.js [start|update|install <item|all>|software|sync|status]');
+      console.log('Usage: node src/cli.js [start|update|install <item|all>|software|sync|status|transcribe <file>]');
   }
   if (cmd !== 'start') process.exit(0);
 }

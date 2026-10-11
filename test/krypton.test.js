@@ -174,6 +174,9 @@ test('Krypton runs test 1 end to end on a LinkedIn-like site', { skip: !HAS_BROW
   // People: every result with its page, provider-looking people filtered out by the AI.
   const people = json('Need a bookkeeper', 'People', '_results.json');
   assert.deepEqual(people.map((p) => [p.slug, p.page]), [['jane-owner', 1], ['bob-bookkeeper', 1], ['carl-cafe', 1], ['dana-dental', 2], ['erin-cpa', 2]]);
+  // Page 2 is the 2026 layout: names come out bare, and mutual connections are not results.
+  assert.deepEqual(people.filter((p) => p.page === 2).map((p) => p.name), ['Dana Dental', 'Erin CPA']);
+  assert.match(people.find((p) => p.slug === 'dana-dental').text, /Dentist and practice owner\nMiami, Florida/);
   assert.ok(fs.existsSync(path.join(term, 'People', '_search pages', 'Page 2.txt')));
   const kept = json('Need a bookkeeper', 'People', '_kept.json');
   assert.deepEqual(kept.map((p) => p.slug), ['jane-owner', 'carl-cafe', 'dana-dental']);

@@ -10,7 +10,8 @@ import path from 'node:path';
 import { PATHS, readJson } from '../../../core/paths.js';
 
 export const DEFAULT_SELECTORS = {
-  peopleCard: ['li.reusable-search__result-container', '[data-chameleon-result-urn]', '[data-view-name="search-entity-result-universal-template"]', 'li'],
+  // The 2026 search page (SDUI) has obfuscated classes: each result is a [role="listitem"].
+  peopleCard: ['li.reusable-search__result-container', '[data-chameleon-result-urn]', '[data-view-name="search-entity-result-universal-template"]', '[role="list"] > [role="listitem"]', '[role="listitem"]', 'li'],
   profileImage: ['img.pv-top-card-profile-picture__image--show', 'img.pv-top-card-profile-picture__image', 'img[class*="profile-picture"]', 'img[class*="profile-photo"]'],
   headerImage: ['img#profile-background-image-target-image', 'img[class*="profile-background-image"]', 'img[class*="background"]', 'img[class*="banner"]'],
   headline: ['.text-body-medium.break-words', '[data-generated-suggestion-target]', '.pv-text-details__left-panel .text-body-medium'],
