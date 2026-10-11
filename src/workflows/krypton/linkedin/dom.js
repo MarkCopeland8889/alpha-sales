@@ -1,0 +1,487 @@
+// Page readers that run inside the browser (page.evaluate). Each function is
+// self-contained: it receives the selector set as its only argument and returns plain data.
+// They prefer stable structure (profile links, data-urn ids, job ids) over class names.
+
+export function pageState(sel) {
+  const text = document.body ? document.body.innerText : '';
+  const path = location.pathname;
+  return {
+    url: location.href,
+    title: document.title,
+    loginWall: /\/(login|authwall|checkpoint|uas\/login|signup)/.test(path) || Boolean(document.querySelector('#session_key, form[action*="login-submit"]')),
+    noResults: new RegExp(sel.patterns.noResults, 'i').test(text.slice(0, 5000)),
+  };
+}
+
+// Finds the first visible element matching the description, tags it with data-alpha-target
+// so Playwright can click it for real, and refuses anything that would send, apply or react.
+export function markTarget(spec) {
+  const { scope, selectors = [], textPattern, ariaPattern, token, forbidden, nth = 0 } = spec;
+  const roots = scope ? [...document.querySelectorAll(scope)] : [document];
+  const visible = (el) => {
+    const r = el.getBoundingClientRect();
+    const st = getComputedStyle(el);
+    return r.width > 0 && r.height > 0 && st.visibility !== 'hidden' && st.display !== 'none';
+  };
+  const textRe = textPattern ? new RegExp(textPattern, 'i') : null;
+  const ariaRe = ariaPattern ? new RegExp(ariaPattern, 'i') : null;
+  const bad = new RegExp(forbidden, 'i');
+  const found = [];
+  for (const root of roots) {
+    const pool = selectors.length ? root.querySelectorAll(selectors.join(',')) : root.querySelectorAll('button, a[role="button"], [role="button"], a');
+    for (const el of pool) {
+      const text = (el.innerText || el.textContent || '').trim().replace(/\s+/g, ' ');
+      const aria = el.getAttribute('aria-label') || '';
+      const matches = (!textRe && !ariaRe)
+        || (textRe && (textRe.test(text) || (!ariaRe && textRe.test(aria))))
+        || (ariaRe && (ariaRe.test(aria) || ariaRe.test(text)));
+      if (!matches) continue;
+      if (bad.test(text) || bad.test(aria)) continue;
+      if (el.getAttribute('aria-expanded') === 'true' && !spec.allowExpanded) continue;
+      if (el.disabled || el.getAttribute('aria-disabled') === 'true') continue;
+      if (!visible(el)) continue;
+      found.push(el);
+    }
+  }
+  const el = found[nth];
+  if (!el) return null;
+  document.querySelectorAll('[data-alpha-target]').forEach((e) => e.removeAttribute('data-alpha-target'));
+  el.setAttribute('data-alpha-target', token);
+  el.scrollIntoView({ block: 'center' });
+  return { text: (el.innerText || '').trim().slice(0, 80), aria: el.getAttribute('aria-label') || '' };
+}
+
+export function countTargets(spec) {
+  const { scope, textPattern, forbidden } = spec;
+  const root = scope ? document.querySelector(scope) : document;
+  if (!root) return 0;
+  const re = new RegExp(textPattern, 'i');
+  const bad = new RegExp(forbidden, 'i');
+  return [...root.querySelectorAll('button, [role="button"]')].filter((el) => {
+    const t = (el.innerText || '').trim().replace(/\s+/g, ' ');
+    const r = el.getBoundingClientRect();
+    return re.test(t) && !bad.test(t) && el.getAttribute('aria-expanded') !== 'true' && r.width > 0 && r.height > 0;
+  }).length;
+}
+
+export function peopleResults(sel) {
+  const root = document.querySelector('main') || document.body;
+  // Screen-reader-only copies ("View Jane's profile") would otherwise show up in the text.
+  const hidden = [...root.querySelectorAll('.visually-hidden, [class*="visually-hidden"]')];
+  hidden.forEach((el) => el.setAttribute('data-alpha-hidden', el.style.display || '-'));
+  hidden.forEach((el) => { el.style.display = 'none'; });
+  const lines = (el) => (el.innerText || '').split('\n').map((s) => s.trim()).filter(Boolean);
+  const cards = new Map();
+  for (const a of root.querySelectorAll('a[href*="/in/"]')) {
+    const m = a.href.match(/\/in\/([^/?#]+)/);
+    if (!m) continue;
+    let card = null;
+    for (const s of sel.peopleCard) {
+      card = a.closest(s);
+      if (card && card !== root) break;
+      card = null;
+    }
+    if (!card || cards.has(card)) continue;
+    const slug = decodeURIComponent(m[1]);
+    const nameSpan = a.querySelector('span[aria-hidden="true"]');
+    let name = lines(nameSpan || a)[0] || '';
+    if (!name || /^view\b/i.test(name) || name.length > 120) name = lines(card)[0] || slug;
+    const text = [...new Set(lines(card))].filter((l) => !/^(connect|message|follow|view .*profile)$/i.test(l)).join('\n');
+    cards.set(card, { slug, name, url: `${location.origin}/in/${slug}/`, text: text.slice(0, 1500) });
+  }
+  hidden.forEach((el) => {
+    const was = el.getAttribute('data-alpha-hidden');
+    el.style.display = was === '-' ? '' : was;
+    el.removeAttribute('data-alpha-hidden');
+  });
+  // One entry per person (a card can repeat across lazy-loaded sections).
+  const bySlug = new Map();
+  for (const r of cards.values()) if (!bySlug.has(r.slug)) bySlug.set(r.slug, r);
+  return [...bySlug.values()];
+}
+
+export function profileTop(sel) {
+  const main = document.querySelector('main') || document.body;
+  const top = main.querySelector('section') || main;
+  const pick = (list, scope = top) => {
+    for (const s of list) {
+      const el = scope.querySelector(s);
+      if (el) return el;
+    }
+    return null;
+  };
+  const name = (top.querySelector('h1')?.innerText || document.title.split('|')[0] || '').trim();
+  const header = pick(sel.headerImage);
+  let photo = pick(sel.profileImage);
+  if (!photo && name) photo = [...top.querySelectorAll('img')].find((i) => i !== header && i.alt && i.alt.includes(name)) || null;
+  const src = (img) => (img && img.src && !img.src.startsWith('data:') ? img.src : null);
+  return {
+    name,
+    headline: (pick(sel.headline)?.innerText || '').trim(),
+    photoUrl: src(photo),
+    headerUrl: src(header),
+    hasActivity: Boolean(document.querySelector('#activity, a[href*="/recent-activity/"]')),
+  };
+}
+
+export function featured() {
+  const sections = [...document.querySelectorAll('main section')];
+  const sec = sections.find((s) => s.querySelector('#featured') || /^\s*featured\s*$/im.test(s.querySelector('h2, h3')?.innerText || ''));
+  if (!sec) return null;
+  const seen = new Set();
+  const items = [];
+  for (const a of sec.querySelectorAll('a[href]')) {
+    if (!a.href || a.href.startsWith('javascript') || seen.has(a.href)) continue;
+    seen.add(a.href);
+    const title = (a.innerText || a.getAttribute('aria-label') || '').trim().split('\n')[0].slice(0, 200);
+    let host = '';
+    try {
+      host = new URL(a.href).hostname;
+    } catch {
+      continue;
+    }
+    items.push({ title, url: a.href, external: !/(^|\.)linkedin\.com$/.test(host) && host !== location.hostname });
+  }
+  return { items };
+}
+
+export function postUrns() {
+  const urns = new Set();
+  for (const el of document.querySelectorAll('[data-urn], [data-id], [data-chameleon-result-urn]')) {
+    const v = el.getAttribute('data-urn') || el.getAttribute('data-id') || el.getAttribute('data-chameleon-result-urn') || '';
+    if (/^urn:li:(activity|ugcPost|share):\d+/.test(v)) urns.add(v.match(/^urn:li:\w+:\d+/)[0]);
+  }
+  for (const a of document.querySelectorAll('a[href*="/feed/update/urn:li:"]')) {
+    const m = a.href.match(/urn:li:(activity|ugcPost|share):\d+/);
+    if (m) urns.add(m[0]);
+  }
+  return [...urns];
+}
+
+export function postDetails(sel) {
+  const pick = (list, scope) => {
+    for (const s of list) {
+      const el = scope.querySelector(s);
+      if (el) return el;
+    }
+    return null;
+  };
+  let post = null;
+  for (const s of sel.postContainer) {
+    post = document.querySelector(s);
+    if (post) break;
+  }
+  post ||= document.querySelector('main') || document.body;
+  const firstLine = (el) => ((el?.innerText || '').split('\n').map((s) => s.trim()).find(Boolean) || '');
+  const actorEl = pick(sel.postActor, post);
+  const actorLink = post.querySelector('a[href*="/in/"], a[href*="/company/"]');
+  const textEl = pick(sel.postText, post);
+  const num = (s) => {
+    const m = String(s).replace(/,/g, '').match(/([\d.]+)\s*([KkMm])?/);
+    if (!m) return null;
+    return Math.round(Number(m[1]) * (m[2] ? (/k/i.test(m[2]) ? 1000 : 1000000) : 1));
+  };
+  const metrics = { reactions: null, comments: null, reposts: null };
+  for (const el of post.querySelectorAll('button, a, span, li')) {
+    if (el.closest('article, .comments-comment-item')) continue;
+    const label = `${el.getAttribute('aria-label') || ''} ${(el.innerText || '').trim()}`.replace(/\s+/g, ' ');
+    if (label.length > 80) continue;
+    if (metrics.reactions == null && /[\d,.]+[KkMm]?\s+reactions?\b/i.test(label)) metrics.reactions = num(label.match(/[\d,.]+[KkMm]?(?=\s+reactions?)/i)[0]);
+    if (metrics.comments == null && /[\d,.]+[KkMm]?\s+comments?\b/i.test(label)) metrics.comments = num(label.match(/[\d,.]+[KkMm]?(?=\s+comments?)/i)[0]);
+    if (metrics.reposts == null && /[\d,.]+[KkMm]?\s+(reposts?|shares?)\b/i.test(label)) metrics.reposts = num(label.match(/[\d,.]+[KkMm]?(?=\s+(reposts?|shares?))/i)[0]);
+  }
+  if (metrics.reactions == null) {
+    const others = post.innerText.match(/and ([\d,.]+[KkMm]?) others?/i);
+    if (others) metrics.reactions = (num(others[1]) || 0) + 1;
+  }
+  const images = [...post.querySelectorAll('img')]
+    .filter((i) => i.src && !i.src.startsWith('data:') && !i.closest('article, .comments-comment-item, .update-components-actor, [class*="actor"]'))
+    .filter((i) => (i.naturalWidth || i.width) >= 200 || /update-components-image|feed-shared-image|carousel/i.test(i.className + (i.parentElement?.className || '')))
+    .map((i) => i.src);
+  const video = post.querySelector('video');
+  const doc = post.querySelector('.update-components-document__container, iframe[title*="document" i]');
+  return {
+    urn: post.getAttribute('data-urn') || null,
+    url: location.href,
+    author: firstLine(actorEl) || firstLine(actorLink),
+    authorUrl: actorLink ? actorLink.href.split('?')[0] : null,
+    date: firstLine(pick(sel.postDate, post)),
+    caption: (textEl?.innerText || '').trim(),
+    metrics,
+    media: {
+      images: [...new Set(images)],
+      video: video ? (video.currentSrc || video.src || video.poster || 'video') : null,
+      document: doc ? (doc.getAttribute('title') || 'document') : null,
+    },
+  };
+}
+
+export function comments(sel) {
+  const items = [...document.querySelectorAll(sel.commentItem.join(','))];
+  const pick = (list, scope) => {
+    for (const s of list) {
+      const el = scope.querySelector(s);
+      if (el) return el;
+    }
+    return null;
+  };
+  const out = [];
+  const seen = new Set();
+  for (const item of items) {
+    if (seen.has(item)) continue;
+    seen.add(item);
+    const link = item.querySelector('a[href*="/in/"], a[href*="/company/"]');
+    const nameEl = pick(sel.commentAuthorName, item);
+    const author = ((nameEl || link)?.innerText || '').split('\n').map((s) => s.trim()).find(Boolean) || '';
+    const textEl = pick(sel.commentText, item);
+    out.push({
+      author,
+      profileUrl: link ? link.href.split('?')[0] : null,
+      headline: (pick(sel.commentAuthorHeadline, item)?.innerText || '').trim().split('\n')[0],
+      text: (textEl?.innerText || '').trim(),
+      isReply: Boolean(item.parentElement?.closest(sel.commentItem.join(','))),
+    });
+  }
+  return out;
+}
+
+export function reactionsDialog(sel) {
+  let dialog = null;
+  for (const s of sel.reactionsDialog) {
+    dialog = document.querySelector(s);
+    if (dialog) break;
+  }
+  if (!dialog) return null;
+  const people = [];
+  const seen = new Set();
+  for (const li of dialog.querySelectorAll('li')) {
+    const a = li.querySelector('a[href*="/in/"], a[href*="/company/"]');
+    if (!a) continue;
+    const url = a.href.split('?')[0];
+    if (seen.has(url)) continue;
+    seen.add(url);
+    const lines = (a.innerText || li.innerText || '').split('\n').map((s) => s.trim()).filter(Boolean);
+    const icon = li.querySelector(sel.reactionIcon.join(','));
+    people.push({
+      name: lines[0] || '',
+      headline: lines.find((l, i) => i > 0 && !/^·|^\d(st|nd|rd|th)$|degree connection/i.test(l)) || '',
+      profileUrl: url,
+      reaction: icon ? (icon.getAttribute('data-test-reactions-icon-type') || icon.getAttribute('alt') || '').toLowerCase() : null,
+    });
+  }
+  return people;
+}
+
+// Scrolls the scrollable part of a dialog (or of the job list) once. Returns true if it moved.
+export function scrollInside(spec) {
+  const { selectors, near } = spec;
+  let box = null;
+  for (const s of selectors || []) {
+    const el = document.querySelector(s);
+    if (el && el.scrollHeight > el.clientHeight + 5) {
+      box = el;
+      break;
+    }
+  }
+  if (!box && near) {
+    let el = document.querySelector(near);
+    while (el && el !== document.body) {
+      const st = getComputedStyle(el);
+      if (/(auto|scroll)/.test(st.overflowY) && el.scrollHeight > el.clientHeight + 5) {
+        box = el;
+        break;
+      }
+      el = el.parentElement;
+    }
+  }
+  if (!box) return false;
+  const before = box.scrollTop;
+  box.scrollTop = Math.min(box.scrollHeight, before + Math.max(300, box.clientHeight * 0.8));
+  return box.scrollTop > before;
+}
+
+export function jobIds(sel) {
+  const ids = [];
+  const add = (v) => {
+    if (v && /^\d+$/.test(v) && !ids.includes(v)) ids.push(v);
+  };
+  for (const el of document.querySelectorAll(sel.jobCard.join(','))) add(el.getAttribute('data-job-id') || el.getAttribute('data-occludable-job-id'));
+  for (const a of document.querySelectorAll('a[href*="/jobs/view/"]')) add((a.href.match(/\/jobs\/view\/(\d+)/) || [])[1]);
+  return ids;
+}
+
+export function jobDetails(sel) {
+  const main = document.querySelector('main') || document.body;
+  const pick = (list) => {
+    for (const s of list) {
+      const el = main.querySelector(s);
+      if (el) return el;
+    }
+    return null;
+  };
+  const company = main.querySelector('a[href*="/company/"]');
+  let companyUrl = null;
+  if (company) {
+    const m = company.href.match(/^(.*\/company\/[^/?#]+)/);
+    companyUrl = m ? `${m[1]}/` : company.href;
+  }
+  return {
+    title: (pick(sel.jobTitle)?.innerText || '').trim().split('\n')[0],
+    company: ((company?.innerText || '').trim().split('\n')[0]) || '',
+    companyUrl,
+    details: (pick(sel.jobDetails)?.innerText || '').trim(),
+    fullText: (main.innerText || '').trim(),
+    url: location.href.split('?')[0],
+  };
+}
+
+// Posts listed on a profile's activity page with their age label ("3d", "2w", "1mo", ...).
+export function activityPosts(sel) {
+  const out = [];
+  const seen = new Set();
+  for (const el of document.querySelectorAll('[data-urn], [data-id]')) {
+    const v = el.getAttribute('data-urn') || el.getAttribute('data-id') || '';
+    const m = v.match(/^urn:li:(activity|ugcPost|share):\d+/);
+    if (!m || seen.has(m[0])) continue;
+    seen.add(m[0]);
+    let date = '';
+    for (const s of sel.postDate) {
+      const d = el.querySelector(s);
+      if (d) {
+        date = (d.innerText || '').trim().split('\n')[0];
+        break;
+      }
+    }
+    if (!date) {
+      const t = el.querySelector('time');
+      date = t ? (t.getAttribute('datetime') || t.innerText || '') : '';
+    }
+    const repost = /\breposted this\b/i.test((el.innerText || '').slice(0, 300));
+    out.push({ urn: m[0], date, repost });
+  }
+  return out;
+}
+
+export function groupResults() {
+  const root = document.querySelector('main') || document.body;
+  const out = new Map();
+  for (const a of root.querySelectorAll('a[href*="/groups/"]')) {
+    const m = a.href.match(/\/groups\/(\d+)/);
+    if (!m || out.has(m[1])) continue;
+    const card = a.closest('li') || a.parentElement;
+    const lines = (card.innerText || '').split('\n').map((s) => s.trim()).filter(Boolean).filter((l) => !/^(join|request to join|joined|pending)$/i.test(l));
+    out.set(m[1], { id: m[1], name: (a.innerText || '').trim().split('\n')[0] || lines[0] || m[1], url: `${location.origin}/groups/${m[1]}/`, text: lines.join('\n').slice(0, 1500) });
+  }
+  return [...out.values()];
+}
+
+export function mainText() {
+  return ((document.querySelector('main') || document.body).innerText || '').trim();
+}
+
+export function pageText() {
+  return (document.body ? document.body.innerText : '').trim();
+}
+
+export function scrollToBottom() {
+  const before = document.scrollingElement.scrollTop;
+  window.scrollTo(0, document.scrollingElement.scrollHeight);
+  return { moved: document.scrollingElement.scrollTop > before, height: document.scrollingElement.scrollHeight };
+}
+
+// ---------- Sales Navigator ----------
+
+export function salesLeads() {
+  const out = new Map();
+  for (const a of document.querySelectorAll('a[href*="/sales/lead/"], a[href*="/sales/people/"]')) {
+    const m = a.href.match(/\/sales\/(?:lead|people)\/([^,/?#]+)/);
+    if (!m || out.has(m[1])) continue;
+    const name = (a.innerText || '').trim().split('\n')[0];
+    if (!name) continue;
+    const card = a.closest('li') || a.closest('[data-x-search-result]') || a.parentElement;
+    const lines = (card.innerText || '').split('\n').map((x) => x.trim()).filter(Boolean)
+      .filter((l) => !/^(save|saved|message|connect|view profile|add note|more)$/i.test(l));
+    out.set(m[1], { leadId: m[1], name, salesUrl: a.href, text: [...new Set(lines)].join('\n').slice(0, 1500) });
+  }
+  return [...out.values()];
+}
+
+// "1,234 results", "2.5K+ results" -> number (null when not shown).
+export function resultsTotal() {
+  const text = (document.querySelector('main') || document.body).innerText || '';
+  const m = text.match(/([\d][\d,.]*)\s*([KkMm])?\+?\s+results?\b/);
+  if (!m) return null;
+  const n = Number(m[1].replace(/,/g, ''));
+  return Math.round(n * (m[2] ? (/k/i.test(m[2]) ? 1000 : 1000000) : 1));
+}
+
+// Opens nothing: finds the filter block whose heading is `label` and reports what it shows,
+// tagging its text input (if any) with `token` so it can be typed into.
+export function filterBlock(spec) {
+  const { label, token } = spec;
+  const want = label.toLowerCase();
+  const heads = [...document.querySelectorAll('legend, h3, h4, button, span, div[role="button"], label')]
+    .filter((el) => (el.innerText || '').trim().split('\n')[0].trim().toLowerCase() === want);
+  for (const head of heads) {
+    const block = head.closest('fieldset, li, section, [class*="filter"]') || head.parentElement;
+    if (!block) continue;
+    const r = head.getBoundingClientRect();
+    if (!r.width || !r.height) continue;
+    document.querySelectorAll('[data-alpha-target]').forEach((e) => e.removeAttribute('data-alpha-target'));
+    const input = [...block.querySelectorAll('input[type="text"], input:not([type]), input[type="search"]')].find((i) => i.getBoundingClientRect().width > 0);
+    if (input) input.setAttribute('data-alpha-target', `${token}-input`);
+    head.setAttribute('data-alpha-target', `${token}-head`);
+    block.setAttribute('data-alpha-block', token);
+    return { found: true, hasInput: Boolean(input), expanded: head.getAttribute('aria-expanded'), text: (block.innerText || '').trim().slice(0, 1500) };
+  }
+  return { found: false };
+}
+
+// Tags the option (or its "Include" button) that best matches `value` inside a filter block
+// or the open suggestion list.
+export function markOption(spec) {
+  const { token, block, value, forbidden } = spec;
+  const want = value.toLowerCase();
+  const bad = new RegExp(forbidden, 'i');
+  const scopes = [document.querySelector(`[data-alpha-block="${block}"]`), document.querySelector('[role="listbox"]'), document].filter(Boolean);
+  for (const scope of scopes) {
+    const options = [...scope.querySelectorAll('[role="option"], li, button, label')]
+      .filter((el) => el.getBoundingClientRect().width > 0)
+      .map((el) => ({ el, text: (el.innerText || '').trim().replace(/\s+/g, ' ') }))
+      .filter((o) => o.text && o.text.length < 120 && !bad.test(o.text));
+    const exact = options.find((o) => o.text.toLowerCase().replace(/^include\s*|\s*(include|exclude)$/gi, '').trim() === want);
+    const partial = options.find((o) => o.text.toLowerCase().includes(want));
+    const hit = exact || partial;
+    if (!hit) continue;
+    const include = [...hit.el.querySelectorAll('button, [role="button"]')].find((b) => /^include$/i.test((b.innerText || b.getAttribute('aria-label') || '').trim()) || /^include/i.test(b.getAttribute('aria-label') || ''));
+    const target = include || hit.el;
+    document.querySelectorAll('[data-alpha-target]').forEach((e) => e.removeAttribute('data-alpha-target'));
+    target.setAttribute('data-alpha-target', token);
+    target.scrollIntoView({ block: 'center' });
+    return { text: hit.text };
+  }
+  return null;
+}
+
+// Numbered list of the visible controls, for the light navigation agent. Each one is tagged
+// with data-alpha-snap so the agent's choice can be clicked or typed into.
+export function controlsSnapshot(spec) {
+  const bad = new RegExp(spec.forbidden, 'i');
+  document.querySelectorAll('[data-alpha-snap]').forEach((e) => e.removeAttribute('data-alpha-snap'));
+  const els = [...document.querySelectorAll('button, a[href], input, select, textarea, [role="button"], [role="option"], [role="checkbox"], [role="tab"], label')];
+  const out = [];
+  for (const el of els) {
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height || r.bottom < 0 || r.top > window.innerHeight * 3) continue;
+    const text = (el.innerText || el.value || '').trim().replace(/\s+/g, ' ').slice(0, 80);
+    const aria = el.getAttribute('aria-label') || '';
+    const placeholder = el.getAttribute('placeholder') || '';
+    if (!text && !aria && !placeholder) continue;
+    if (bad.test(text) || bad.test(aria)) continue;
+    const n = out.length + 1;
+    el.setAttribute('data-alpha-snap', String(n));
+    out.push({ n, tag: el.tagName.toLowerCase(), role: el.getAttribute('role') || '', text, aria: aria.slice(0, 80), placeholder, expanded: el.getAttribute('aria-expanded'), checked: el.getAttribute('aria-checked') || (el.checked ? 'true' : null) });
+    if (out.length >= 160) break;
+  }
+  return out;
+}

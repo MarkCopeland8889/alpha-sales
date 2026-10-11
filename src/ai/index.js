@@ -17,6 +17,14 @@ const PROVIDERS = [anthropic, geminiApi, zai, opencodeZen, openai, ollama, codex
   chatgptWeb, geminiWeb, claudeWeb, googleWeb, jev, mock];
 const byId = new Map(PROVIDERS.map((p) => [p.id, p]));
 
+// Adds a provider at runtime (plugins, or a scripted provider in tests).
+export function registerProvider(p) {
+  if (!p?.id || typeof p.complete !== 'function') throw new Error('A provider needs an id and complete()');
+  if (!byId.has(p.id)) PROVIDERS.push(p);
+  else PROVIDERS.splice(PROVIDERS.indexOf(byId.get(p.id)), 1, p);
+  byId.set(p.id, p);
+}
+
 export function getProvider(id) {
   const p = byId.get(id);
   if (!p) throw new Error(`Unknown AI provider "${id}"`);
@@ -61,13 +69,17 @@ async function complete(req) {
 }
 
 // Asks for JSON and parses it (tolerates ```json fences and surrounding prose).
-async function json(req) {
-  const res = await complete({ ...req, system: `${req.system ? `${req.system}\n\n` : ''}Reply with valid JSON only, no commentary.` });
-  const raw = res.text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
+export function parseJson(text) {
+  const raw = String(text).trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
   const start = raw.search(/[[{]/);
   const end = Math.max(raw.lastIndexOf(']'), raw.lastIndexOf('}'));
   if (start < 0 || end < start) throw new Error('The AI did not return JSON');
   return JSON.parse(raw.slice(start, end + 1));
 }
 
-export const ai = { complete, json, listProviders, capabilityMatrix, getProvider };
+async function json(req) {
+  const res = await complete({ ...req, system: `${req.system ? `${req.system}\n\n` : ''}Reply with valid JSON only, no commentary.` });
+  return parseJson(res.text);
+}
+
+export const ai = { complete, json, parseJson, listProviders, capabilityMatrix, getProvider, registerProvider };

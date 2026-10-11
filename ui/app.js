@@ -6,6 +6,7 @@ const NAV = [
   ['Browsers', [['/profiles', 'Profiles & sessions', 'browsers', 'profiles'], ['/proxies', 'Proxies', 'browsers', 'proxies'], ['/configs', 'Configurations', 'browsers', 'configs'], ['/extensions', 'Extensions', 'browsers', 'extensions']]],
   ['Accounts', [['/accounts', 'Accounts', 'accounts', 'accounts']]],
   ['AI', [['/ai', 'AI hub', 'ai', 'ai']]],
+  ['Workflows', [['/krypton', 'Krypton (LinkedIn)', 'workflows', 'krypton']]],
   ['Automation', [['/scrapers', 'Scrapers', 'automation', 'scrapers'], ['/jobs', 'Jobs', 'automation', 'jobs'], ['/runs', 'Runs', 'automation', 'runs'], ['/hitl', 'Human help', 'automation', 'hitl'], ['/guardrails', 'Guardrails', 'automation', 'guardrails']]],
   ['System', [['/sync', 'Google Drive', 'system', 'sync'], ['/commands', 'Commands', 'system', 'commands'], ['/logs', 'Logs', 'system', 'logs'], ['/software', 'Software', 'system', 'software'], ['/settings', 'Settings', 'system', 'settings']]],
 ];

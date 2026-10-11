@@ -30,6 +30,7 @@ import * as guardrails from '../guardrails/index.js';
 import * as sync from '../sync/rclone.js';
 import { softwareStatus, installSoftware } from '../software/index.js';
 import { apiToken } from './security.js';
+import { kryptonRouter } from '../workflows/krypton/api.js';
 
 const log = logger('api');
 export const api = express.Router();
@@ -189,6 +190,9 @@ api.post('/runs/:id/resume', h(async (req) => {
   const run = await jobs.getRun(uid(), req.params.id);
   return queueRun(uid(), { jobId: run.job_id || undefined, spec: run.job_id ? undefined : run.spec, label: `${run.label} (resumed)`, resumeFrom: run.id });
 }));
+
+// ---- Workflows ---------------------------------------------------------------------------
+api.use('/krypton', kryptonRouter({ h, uid, queueRun }));
 
 // ---- Human-in-the-loop, guardrails -------------------------------------------------------
 api.get('/hitl', h(async () => ({

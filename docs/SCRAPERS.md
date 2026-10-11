@@ -73,15 +73,10 @@ Rules of thumb:
 | `ai-prompt` | Sends a prompt (with `{{variables}}` from the project and earlier steps) to any AI provider and saves the answer to `shared`. |
 | `history-warmup` | Visits a list of ordinary sites so a new profile has normal history. |
 
-## How the sample Krypton workflow maps onto this
+## Krypton
 
-The LinkedIn sample (`docs/source/linkedin-sample-test.md`) becomes one job:
-
-1. `ai-prompt` step: generate search terms from the project's business and ICP variables,
-   `saveAs: "terms"`, JSON on.
-2. A people-search scraper reading `ctx.shared.terms`, with a checkpoint per term and page.
-3. A profile scraper and a post scraper fed from the people results.
-4. A jobs-search scraper and a posts-search scraper.
-
-Each writes into `ctx.store('LinkedIn', 'Run <date>')` in the folder layout from the sample.
-These platform scrapers are not part of this foundation; see `docs/ROADMAP.md`.
+Krypton (LinkedIn client generation and prospecting) is the built-in scraper `krypton-linkedin`.
+Its code lives in `src/workflows/krypton` and is described in `docs/KRYPTON.md`. It is a good
+example of a larger scraper: page readers in `linkedin/dom.js` run inside the page, every click
+goes through one read-only guard, each unit of work is saved before the next starts, and AI
+answers are kept in `AI Runs/`.

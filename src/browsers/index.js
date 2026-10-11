@@ -14,8 +14,8 @@ import { BROWSER_FOLDERS, PATHS, ensureDir, profileDir } from '../core/paths.js'
 import { config as env } from '../core/env.js';
 import { logger } from '../core/logbook.js';
 import { emit } from '../core/events.js';
-import { shortId, stamp } from '../core/utils.js';
-import { getProfile, createProfile, updateProfile, acquireLock, releaseLock } from '../profiles/index.js';
+import { shortId, stamp, sleep } from '../core/utils.js';
+import { getProfile, createProfile, updateProfile, acquireLock, releaseLock, readLock } from '../profiles/index.js';
 import { getConfig } from '../configs/index.js';
 import { getProxy, startForwarder, describe as describeProxy } from '../proxies/index.js';
 import { launchChrome, findChrome, puppeteerFor } from './chrome.js';
@@ -188,6 +188,9 @@ export async function openBrowser(opts) {
   }
 
   const id = `s_${shortId()}`;
+  // A run that just finished on this profile may still be closing its browser: wait for it.
+  const until = Date.now() + (opts.lockWaitMs ?? 30000);
+  while (readLock(browser, profile.name)?.pid === process.pid && Date.now() < until) await sleep(250);
   await acquireLock(browser, profile.name, id);
   let forwarder = null;
   try {

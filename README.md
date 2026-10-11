@@ -6,8 +6,9 @@ talks to AI providers, keeps files in sync through Google Drive, and records eve
 Supabase. A local control panel exposes every function.
 
 This repository is the foundation from the Alpha-Sales Blueprint (`docs/source/blueprint.md`).
-Platform workflows such as the LinkedIn Krypton test (`docs/source/linkedin-sample-test.md`) are
-built on top of it as scrapers and jobs.
+Platform workflows are built on top of it as scrapers and jobs. The first one, **Krypton**
+(LinkedIn client generation and prospecting, `docs/KRYPTON.md`), is on the control panel under
+Workflows.
 
 ## Quick start
 
@@ -58,8 +59,10 @@ database. Deleted files are moved to `Archive/<date>/` in Drive instead of being
 
 - `docs/ARCHITECTURE.md` maps every blueprint section to the code that implements it.
 - `docs/SCRAPERS.md` explains how to write a scraper and build jobs from scrapers.
+- `docs/KRYPTON.md` explains the Krypton LinkedIn workflow: settings, what a run does, where
+  the data goes, resuming, and adjusting selectors.
 - `docs/ROADMAP.md` lists what is planned next (AI chat websites, Jev, the dynamic agent,
-  the Krypton workflow).
+  more Krypton platforms).
 - `Software/List of Software Installations & Commands.md` lists every install step.
 
 ## Command line

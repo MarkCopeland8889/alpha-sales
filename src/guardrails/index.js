@@ -24,6 +24,7 @@ export const DEFAULT_GUARDRAILS = {
     'linkedin.profile_view': { perDay: 80 },
     'linkedin.search_page': { perDay: 150 },
     'linkedin.post_view': { perDay: 300 },
+    'linkedin.job_view': { perDay: 200 },
   },
 };
 
