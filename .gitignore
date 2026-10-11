@@ -1,0 +1,17 @@
+# Data folders (synced to Google Drive with rclone, never committed)
+/Accounts/
+/Profiles/
+/Configurations/
+/Scrapers/
+/Local Files/
+/Logs/
+
+# Installed software. The install list itself is committed.
+/Software/*
+!/Software/List of Software Installations & Commands.md
+
+node_modules/
+.env
+*.log
+.DS_Store
+Thumbs.db

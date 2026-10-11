@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alpha-Sales</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%233b6cff'/%3E%3Cpath d='M9 23l7-14 7 14M12 18h8' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="brand">
+        <span class="logo">A</span>
+        <div><strong>Alpha-Sales</strong><small id="brand-version" class="muted"></small></div>
+      </div>
+      <nav id="nav"></nav>
+    </aside>
+    <div id="main">
+      <header id="topbar">
+        <button id="menu-btn" class="btn ghost" type="button" aria-label="Menu">☰</button>
+        <div id="hitl-banner" hidden></div>
+        <div class="spacer"></div>
+        <span id="live-dot" class="dot" title="Live connection"></span>
+        <span id="device-pill" class="pill"></span>
+        <button id="kill-btn" class="btn danger small" type="button" title="Stop every job and close every browser">Kill switch</button>
+        <span id="user-pill" class="pill"></span>
+      </header>
+      <main id="view"></main>
+      <section id="log-drawer" class="collapsed">
+        <header id="log-toggle"><span>Live log</span><span id="log-last" class="muted"></span></header>
+        <div id="log-lines"></div>
+      </section>
+    </div>
+  </div>
+  <div id="modal-root"></div>
+  <div id="toasts"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
