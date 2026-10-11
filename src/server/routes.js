@@ -101,6 +101,7 @@ api.post('/profiles/:browser/:name/open', h(async (req) => {
   return s.info();
 }));
 
+api.post('/profiles/:browser/:name/sign-in', h(async (req) => browsers.openForSignIn({ browser: req.params.browser, profile: req.params.name, urls: [].concat(req.body?.urls || []).filter(Boolean), proxyId: req.body?.proxyId })));
 api.get('/sessions', h(async () => browsers.listSessions()));
 api.post('/sessions/:id/close', h(async (req) => browsers.closeSession(req.params.id)));
 api.post('/sessions/:id/goto', h(async (req) => {

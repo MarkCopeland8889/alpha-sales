@@ -103,6 +103,7 @@ export function readLock(browser, name) {
 
 export async function acquireLock(browser, name, sessionId) {
   const existing = readLock(browser, name);
+  if (existing?.sessionId?.startsWith('signin_')) throw new Error(`Profile "${name}" is open in a sign-in window. Close that window first.`);
   if (existing) throw new Error(`Profile "${name}" is already open (session ${existing.sessionId})`);
   const m = await machineInfo();
   writeJson(lockFile(browser, name), { pid: process.pid, machineId: m.machineId, sessionId, at: new Date().toISOString() });

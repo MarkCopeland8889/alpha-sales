@@ -10,7 +10,7 @@
 //   ai-clis     Codex, Claude Code, Gemini CLI and OpenCode, installed into Software/Frameworks
 //   autohotkey  prerequisite on Windows (checked, installed with winget on request)
 //   claude-extension  Claude in Chrome, from the Chrome Web Store, added to every new Chrome profile
-//   wispr-flow  Wispr Flow voice dictation desktop app (opens its download page)
+//   whisper     OpenAI Whisper speech to text, in its own Python venv with ffmpeg beside it
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -145,7 +145,7 @@ async function findPython() {
     const m = `${res.stdout}${res.stderr}`.match(/Python (\d+)\.(\d+)/);
     if (res.ok && m && (Number(m[1]) > 3 || Number(m[2]) >= 11)) return c === 'py' ? ['py', '-3'] : [c];
   }
-  throw new Error('Python 3.11 or newer is required for Invisible Playwright. Install it or set PYTHON_PATH.');
+  throw new Error('Python 3.11 or newer is required (Invisible Playwright and Whisper). Install it or set PYTHON_PATH.');
 }
 
 async function installInvisible() {
@@ -211,16 +211,40 @@ async function installClaudeExtension() {
   setDefaultExtension('chrome', ext.name, true);
 }
 
-const WISPR_PATHS = [
-  path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Wispr Flow', 'Wispr Flow.exe'),
-  path.join(process.env.LOCALAPPDATA || '', 'WisprFlow', 'Wispr Flow.exe'),
-  '/Applications/Wispr Flow.app',
-];
-const findWispr = () => WISPR_PATHS.find((p) => p && fs.existsSync(p)) || null;
+// OpenAI Whisper (speech to text). Its own venv in Software/Whisper, with an ffmpeg binary
+// (from imageio-ffmpeg) copied into the venv, and a `whisper` launcher that puts both on PATH.
+const whisperBin = () => path.join(SOFTWARE.whisper, 'venv', IS_WINDOWS ? 'Scripts' : 'bin');
+export const whisperLauncher = () => path.join(SOFTWARE.whisper, IS_WINDOWS ? 'whisper.cmd' : 'whisper');
 
-async function installWispr() {
-  openTerminal(IS_WINDOWS ? 'start https://wisprflow.ai/downloads' : IS_MAC ? 'open https://wisprflow.ai/downloads' : 'echo "Wispr Flow is available for Windows and macOS: https://wisprflow.ai/downloads"', { title: 'Wispr Flow' });
-  throw new Error('Wispr Flow installs from its own installer: the download page is open. Run the installer, then sign in to Wispr Flow.');
+function whisperStatus() {
+  const bin = whisperBin();
+  const ready = [IS_WINDOWS ? 'whisper.exe' : 'whisper', IS_WINDOWS ? 'ffmpeg.exe' : 'ffmpeg'].every((f) => fs.existsSync(path.join(bin, f)));
+  return { installed: ready && fs.existsSync(whisperLauncher()), path: ready ? whisperLauncher() : null };
+}
+
+async function installWhisper() {
+  const bin = whisperBin();
+  const python = path.join(bin, IS_WINDOWS ? 'python.exe' : 'python');
+  if (!fs.existsSync(python)) {
+    const [py, ...pre] = await findPython();
+    ensureDir(SOFTWARE.whisper);
+    const res = await run(py, [...pre, '-m', 'venv', path.join(SOFTWARE.whisper, 'venv')]);
+    if (!res.ok) throw new Error(`Could not create the Python venv: ${res.stderr}`);
+  }
+  let res = await run(python, ['-m', 'pip', 'install', '--upgrade', 'pip', 'openai-whisper', 'imageio-ffmpeg'], { timeout: 40 * 60000 });
+  if (!res.ok) throw new Error(`pip install failed: ${res.stderr.slice(-800)}`);
+  // Whisper calls `ffmpeg` by name, so the bundled binary is copied in under that name.
+  res = await run(python, ['-c', 'import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())'], { quiet: true });
+  if (!res.ok) throw new Error(`ffmpeg was not found: ${res.stderr.slice(-800)}`);
+  const ffmpeg = path.join(bin, IS_WINDOWS ? 'ffmpeg.exe' : 'ffmpeg');
+  fs.copyFileSync(res.stdout.trim(), ffmpeg);
+  if (IS_WINDOWS) {
+    fs.writeFileSync(whisperLauncher(), '@echo off\r\nset "PATH=%~dp0venv\\Scripts;%PATH%"\r\n"%~dp0venv\\Scripts\\whisper.exe" %*\r\n');
+  } else {
+    fs.chmodSync(ffmpeg, 0o755);
+    fs.writeFileSync(whisperLauncher(), '#!/bin/sh\nd="$(cd "$(dirname "$0")" && pwd)"\nPATH="$d/venv/bin:$PATH" exec "$d/venv/bin/whisper" "$@"\n', { mode: 0o755 });
+  }
+  log.ok('Installed Whisper into Software/Whisper', { launcher: whisperLauncher() });
 }
 
 export const SOFTWARE_ITEMS = {
@@ -244,7 +268,7 @@ export const SOFTWARE_ITEMS = {
     install: installClaudeExtension,
     status: () => { const e = findExtension('chrome', 'Claude'); return { installed: Boolean(e), path: e?.path ?? null, version: e?.version ?? null }; },
   },
-  'wispr-flow': { label: 'Wispr Flow (voice dictation app)', install: installWispr, status: () => { const p = findWispr(); return { installed: Boolean(p), path: p, manual: true }; } },
+  whisper: { label: 'Whisper (OpenAI speech to text)', install: installWhisper, status: whisperStatus },
 };
 
 export function softwareStatus() {

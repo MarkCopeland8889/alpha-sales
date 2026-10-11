@@ -11,8 +11,11 @@ button whose text matches those actions (`forbidden` in `src/workflows/krypton/l
 
 ## Running it
 
-1. On **Browsers → Profiles**, create a Chrome profile (or use an existing one) and log in to
-   LinkedIn in it once. For Sales Navigator the account needs a Sales Navigator seat.
+1. On **Browsers → Profiles**, create a Chrome profile (or use an existing one), press
+   **Sign in** and log in to LinkedIn in the window that opens. Sign in opens plain Chrome with
+   no automation attached, so "Continue with Google" and security checks work; close the window
+   when done and the login stays in the profile. For Sales Navigator the account needs a Sales
+   Navigator seat.
 2. Connect an AI: a Claude API key in **Settings**, or log in to Claude Code on **Accounts**
    (OpenAI and Gemini work the same way; pick them on the AI tab).
 3. Open **Workflows → Krypton (LinkedIn)**, press **Fill in test 1**, choose the browser profile

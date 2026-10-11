@@ -61,9 +61,12 @@ inside `Software/Frameworks`. Log each one in from Accounts → New CLI account 
 it a default extension, so every new Chrome profile gets it. Sign in to Claude inside the
 extension once per profile.
 
-**Wispr Flow (voice dictation).** A desktop app for Windows and macOS, not a browser extension.
-Software page → Wispr Flow opens https://wisprflow.ai/downloads; run the installer and sign in.
-The Software page shows it as installed once it is in its usual install folder.
+**Whisper (OpenAI speech to text).** Software page → Whisper, or `node src/cli.js install whisper`.
+Needs Python 3.11 or newer. Creates a venv in `Software/Whisper/venv`, installs `openai-whisper`
+(which brings PyTorch) and `imageio-ffmpeg`, and copies that ffmpeg into the venv as `ffmpeg`,
+since Whisper calls it by name. Run it with the launcher, which puts both on PATH:
+`Software/Whisper/whisper.cmd audio.mp3 --model turbo` on Windows (`Software/Whisper/whisper`
+elsewhere). Each model downloads on first use to `~/.cache/whisper`.
 
 ## Extension Copies
 

@@ -45,6 +45,7 @@ export const SOFTWARE = {
   vulpineos: at('Software', 'VulpineOS'),
   invisible: at('Software', 'Invisible-Playwright'),
   rclone: at('Software', 'rclone'),
+  whisper: at('Software', 'Whisper'),
   sevenZip: at('Software', '7zip'),
 };
 

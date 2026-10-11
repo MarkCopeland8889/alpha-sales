@@ -18,7 +18,7 @@ import { shortId, stamp, sleep } from '../core/utils.js';
 import { getProfile, createProfile, updateProfile, acquireLock, releaseLock, readLock } from '../profiles/index.js';
 import { getConfig } from '../configs/index.js';
 import { getProxy, startForwarder, describe as describeProxy } from '../proxies/index.js';
-import { launchChrome, findChrome, puppeteerFor } from './chrome.js';
+import { launchChrome, findChrome, puppeteerFor, openChromeForSignIn } from './chrome.js';
 import { launchFirefox, launchCamoufox, launchVulpine, firefoxInstalled, camoufoxExecutable, vulpineExecutable } from './firefox-family.js';
 import { launchInvisible, venvPython } from './invisible.js';
 import { pushFolder, status as syncStatus } from '../sync/rclone.js';
@@ -263,20 +263,66 @@ export function getSession(id) {
   return s;
 }
 
+// Sign-in windows: plain Chrome on a profile, with no automation attached, so a person can
+// log in where sites block automated browsers. They hold the profile lock until closed.
+const signIns = new Map();
+
+export async function openForSignIn({ browser, profile: profileName, urls = [], proxyId }) {
+  if (browser !== 'chrome') throw new Error('Sign-in windows are available for Chrome profiles');
+  const profile = getProfile(browser, profileName);
+  if (!profile) throw new Error(`Profile "${profileName}" does not exist`);
+  const id = `signin_${shortId()}`;
+  await acquireLock(browser, profile.name, id);
+  let forwarder = null;
+  try {
+    const pid = proxyId === false ? null : proxyId || profile.proxyId;
+    if (pid) {
+      const user = currentUser();
+      if (!user) throw new Error('Log in to use proxies from the database');
+      forwarder = await startForwarder(await getProxy(user.id, pid));
+    }
+    const list = urls.length ? urls : [profile.startUrl].filter(Boolean);
+    const { child, exited } = openChromeForSignIn({ profilePath: profile.path, proxyServer: forwarder?.server, urls: list });
+    const info = { id, browser, browserLabel: BROWSER_INFO[browser].label, profile: profile.name, engine: 'Chrome (sign-in, no automation)', signIn: true, proxy: null, startedAt: new Date().toISOString(), pages: list.length };
+    signIns.set(id, { info, child });
+    updateProfile(browser, profile.name, { lastUsed: info.startedAt });
+    void exited.then(async () => {
+      signIns.delete(id);
+      await forwarder?.close();
+      releaseLock(browser, profile.name);
+      log.ok(`Closed the sign-in window for "${profile.name}"`);
+      emit('session.closed', { id });
+    });
+    log.ok(`Opened "${profile.name}" in Chrome for sign-in (no automation)`, { urls: list });
+    emit('session.opened', info);
+    return info;
+  } catch (err) {
+    await forwarder?.close();
+    releaseLock(browser, profile.name);
+    throw err;
+  }
+}
+
 export function listSessions() {
-  return [...sessions.values()].map((s) => s.info());
+  return [...[...sessions.values()].map((s) => s.info()), ...[...signIns.values()].map((s) => s.info)];
 }
 
 export async function closeSession(id) {
+  const signIn = signIns.get(id);
+  if (signIn) {
+    signIn.child.kill();
+    return { closed: true };
+  }
   return getSession(id).close();
 }
 
 export async function closeAllSessions() {
+  for (const s of signIns.values()) s.child.kill();
   await Promise.all([...sessions.values()].map((s) => s.close()));
 }
 
 export function isProfileOpen(browser, profile) {
-  return [...sessions.values()].some((s) => s.browser === browser && s.profile === profile);
+  return [...sessions.values(), ...[...signIns.values()].map((s) => s.info)].some((s) => s.browser === browser && s.profile === profile);
 }
 
 export { BROWSER_FOLDERS };

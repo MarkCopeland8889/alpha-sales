@@ -71,7 +71,7 @@ database. Deleted files are moved to `Archive/<date>/` in Drive instead of being
 node src/cli.js start [--no-open]   start the engine and control panel
 node src/cli.js update              quick update (git pull + npm install)
 node src/cli.js install <id|all>    chrome, firefox, camoufox, invisible, rclone, ai-clis, autohotkey,
-                                    claude-extension, wispr-flow
+                                    claude-extension, whisper
 node src/cli.js software            what is installed
 node src/cli.js sync                Google Drive sync now
 node src/cli.js status              version, computer, login

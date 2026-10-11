@@ -56,6 +56,13 @@ export async function profiles(root, ctx) {
     ctx.refresh();
   }, { submit: 'Open browser', success: 'Browser opened' });
 
+  const signIn = (p) => formModal(`Sign in on ${p.name}`, [
+    { name: 'urls', label: 'Open these pages (one per line)', type: 'textarea', rows: 3, value: p.startUrl || '' },
+  ], {}, async (v) => {
+    await api.post(`/profiles/${p.browser}/${encodeURIComponent(p.name)}/sign-in`, { urls: String(v.urls || '').split('\n').map((u) => u.trim()).filter(Boolean) });
+    ctx.refresh();
+  }, { submit: 'Open Chrome', success: 'Chrome opened. Sign in, then close the window.' });
+
   const shot = action(async (s) => {
     const blob = await api.get(`/sessions/${s.id}/screenshot`);
     const url = URL.createObjectURL(blob);
@@ -72,14 +79,14 @@ export async function profiles(root, ctx) {
       { label: 'Config', render: (s) => s.config || (s.seed != null ? `seed ${s.seed}` : 'default') },
       { label: 'Debug URL', render: (s) => (s.cdpUrl ? h('code', {}, s.cdpUrl) : '') },
       { label: 'Opened', render: (s) => timeAgo(s.startedAt) },
-      { label: '', render: (s) => h('div', { class: 'row' },
+      { label: '', render: (s) => (s.signIn ? button('Close', action(async () => { await api.post(`/sessions/${s.id}/close`); ctx.refresh(); }), { small: true, kind: 'danger' }) : h('div', { class: 'row' },
         button('Go to…', () => formModal('Navigate', [{ name: 'url', label: 'URL', required: true }], {}, async (v) => { await api.post(`/sessions/${s.id}/goto`, v); }, { submit: 'Go', success: 'Loaded' }), { small: true }),
         button('Screenshot', () => shot(s), { small: true }),
         button('Export cookies', action(async () => {
           const r = await api.post(`/sessions/${s.id}/cookies/export`);
           toast(`Saved ${r.count} cookies to ${r.file}`);
         }), { small: true }),
-        button('Close', action(async () => { await api.post(`/sessions/${s.id}/close`); ctx.refresh(); }), { small: true, kind: 'danger' })) },
+        button('Close', action(async () => { await api.post(`/sessions/${s.id}/close`); ctx.refresh(); }), { small: true, kind: 'danger' }))) },
     ], sessions, { emptyText: 'No browsers open. Open a profile below.' })),
     card('Profiles', table([
       { label: 'Profile', render: (p) => h('div', {}, h('strong', {}, p.name), h('div', { class: 'muted' }, `${folders[p.browser]}${p.notes ? ` · ${p.notes}` : ''}`)) },
@@ -90,6 +97,7 @@ export async function profiles(root, ctx) {
       { label: '', render: (p) => h('div', { class: 'row' },
         p.locked ? badge('open', 'info')
           : button('Open', () => open(p), { small: true, kind: 'primary' }),
+        p.browser === 'chrome' && !p.locked ? button('Sign in', () => signIn(p), { small: true, title: 'Plain Chrome with no automation, for Google sign-in and security checks' }) : null,
         button('Edit', () => edit(p), { small: true }),
         button('Delete', action(async () => {
           if (!(await confirmBox(`Delete the ${info[p.browser].label} profile "${p.name}"? Its folder is archived to Google Drive first when sync is connected.`))) return;

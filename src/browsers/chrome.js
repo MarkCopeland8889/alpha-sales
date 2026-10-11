@@ -105,6 +105,28 @@ class PipeClient {
   }
 }
 
+// Ordinary Chrome on a profile with nothing attached (no DevTools port or pipe), for a person
+// to sign in to sites that refuse a browser under automation, such as Google sign-in or
+// looping security checks. The logins stay in the profile for the automated sessions.
+export function signInArgs({ profilePath, proxyServer, urls = [] }) {
+  const args = [`--user-data-dir=${profilePath}`, '--no-first-run', '--no-default-browser-check', '--disable-search-engine-choice-screen'];
+  if (proxyServer) args.push(`--proxy-server=${proxyServer}`);
+  if (process.platform === 'linux') {
+    args.push('--password-store=basic');
+    if (process.getuid?.() === 0) args.push('--no-sandbox');
+  }
+  args.push(...(urls.length ? urls : ['about:blank']));
+  return args;
+}
+
+export function openChromeForSignIn({ profilePath, proxyServer, urls }) {
+  const exe = findChrome();
+  if (!exe) throw new Error('Google Chrome was not found. Use Software > Install Chrome, or set CHROME_PATH.');
+  const child = spawn(exe, signInArgs({ profilePath, proxyServer, urls }), { stdio: 'ignore', windowsHide: false });
+  const exited = new Promise((r) => { child.once('exit', r); child.once('error', r); });
+  return { child, exited };
+}
+
 function buildArgs({ profilePath, port, proxyServer, cfg, headless, usePipe, startUrl }) {
   const args = [
     `--user-data-dir=${profilePath}`,
