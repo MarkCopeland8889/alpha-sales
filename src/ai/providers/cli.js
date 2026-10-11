@@ -35,7 +35,8 @@ const base = (id, label, tool, models, defaultModel, reasoningLevels = []) => ({
 });
 
 export const codex = {
-  ...base('codex', 'Codex CLI', 'codex', ['gpt-5-codex', 'gpt-5'], 'gpt-5-codex', ['low', 'medium', 'high']),
+  // Models a ChatGPT-plan Codex login accepts (checked with `codex exec -m`); others are refused.
+  ...base('codex', 'Codex CLI', 'codex', ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini'], 'gpt-5.6-sol', ['low', 'medium', 'high']),
   async complete(req) {
     const out = path.join(os.tmpdir(), `alpha-codex-${uid()}.txt`);
     const args = ['exec', '--skip-git-repo-check', '--color', 'never', '--output-last-message', out];
