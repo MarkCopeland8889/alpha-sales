@@ -9,6 +9,8 @@
 //   rclone      rclone binary for Google Drive sync
 //   ai-clis     Codex, Claude Code, Gemini CLI and OpenCode, installed into Software/Frameworks
 //   autohotkey  prerequisite on Windows (checked, installed with winget on request)
+//   claude-extension  Claude in Chrome, from the Chrome Web Store, added to every new Chrome profile
+//   wispr-flow  Wispr Flow voice dictation desktop app (opens its download page)
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -25,6 +27,7 @@ import { firefoxInstalled, camoufoxExecutable, vulpineExecutable } from '../brow
 import { venvPython } from '../browsers/invisible.js';
 import { rcloneExe } from '../sync/rclone.js';
 import { cliInstalled, CLI_TOOLS } from '../ai/cli-tools.js';
+import { addFromWebStore, findExtension, setDefaultExtension } from '../extensions/index.js';
 
 const log = logger('software');
 const running = new Map();
@@ -199,6 +202,27 @@ async function installAutoHotkey() {
   openTerminal('winget install --id AutoHotkey.AutoHotkey -e', { title: 'Install AutoHotkey v2' });
 }
 
+// Claude in Chrome. Override the id with CLAUDE_EXTENSION_ID if the store listing changes.
+export const CLAUDE_EXTENSION_ID = process.env.CLAUDE_EXTENSION_ID || 'fcoeoabgfenejglbffodgkkbkcdhcgfn';
+
+async function installClaudeExtension() {
+  const ext = await addFromWebStore(CLAUDE_EXTENSION_ID, 'Claude');
+  if (!/claude/i.test(ext.title)) log.warn(`The downloaded extension is called "${ext.title}"; check CLAUDE_EXTENSION_ID`);
+  setDefaultExtension('chrome', ext.name, true);
+}
+
+const WISPR_PATHS = [
+  path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Wispr Flow', 'Wispr Flow.exe'),
+  path.join(process.env.LOCALAPPDATA || '', 'WisprFlow', 'Wispr Flow.exe'),
+  '/Applications/Wispr Flow.app',
+];
+const findWispr = () => WISPR_PATHS.find((p) => p && fs.existsSync(p)) || null;
+
+async function installWispr() {
+  openTerminal(IS_WINDOWS ? 'start https://wisprflow.ai/downloads' : IS_MAC ? 'open https://wisprflow.ai/downloads' : 'echo "Wispr Flow is available for Windows and macOS: https://wisprflow.ai/downloads"', { title: 'Wispr Flow' });
+  throw new Error('Wispr Flow installs from its own installer: the download page is open. Run the installer, then sign in to Wispr Flow.');
+}
+
 export const SOFTWARE_ITEMS = {
   chrome: { label: 'Google Chrome', install: installChrome, status: () => { const p = findChrome(); return { installed: Boolean(p), path: p, inRepo: isInRepo(p) }; } },
   firefox: { label: 'Firefox (Playwright build)', install: installFirefox, status: () => ({ installed: firefoxInstalled() }) },
@@ -215,6 +239,12 @@ export const SOFTWARE_ITEMS = {
     },
   },
   autohotkey: { label: 'AutoHotkey v2 (prerequisite)', install: installAutoHotkey, status: () => { const p = findAutoHotkey(); return { installed: Boolean(p), path: p, windowsOnly: true }; } },
+  'claude-extension': {
+    label: 'Claude in Chrome (extension, added to every new Chrome profile)',
+    install: installClaudeExtension,
+    status: () => { const e = findExtension('chrome', 'Claude'); return { installed: Boolean(e), path: e?.path ?? null, version: e?.version ?? null }; },
+  },
+  'wispr-flow': { label: 'Wispr Flow (voice dictation app)', install: installWispr, status: () => { const p = findWispr(); return { installed: Boolean(p), path: p, manual: true }; } },
 };
 
 export function softwareStatus() {
@@ -251,7 +281,7 @@ export async function installSoftware(id) {
 }
 
 export async function installAll() {
-  for (const id of ['rclone', 'chrome', 'firefox', 'camoufox', 'invisible', 'ai-clis']) {
+  for (const id of ['rclone', 'chrome', 'firefox', 'camoufox', 'invisible', 'ai-clis', 'claude-extension']) {
     try {
       await installSoftware(id);
     } catch {

@@ -7,6 +7,7 @@ import { PATHS, BROWSER_FOLDERS, profileDir, safeName, readJson, writeJson, ensu
 import { machineInfo } from '../core/machine.js';
 import { logger } from '../core/logbook.js';
 import { removeWithArchive } from '../sync/rclone.js';
+import { defaultExtensions, EXT_KIND } from '../extensions/index.js';
 
 const log = logger('profiles');
 export const META_FILE = 'alpha-profile.json';
@@ -44,13 +45,15 @@ export function listProfiles(browser) {
   return out;
 }
 
-export function createProfile({ browser, name, proxyId = null, config = null, extensions = [], notes = '', startUrl = '' }) {
+// Without an explicit extension list, a new profile gets the default extensions for its browser.
+export function createProfile({ browser, name, proxyId = null, config = null, extensions, notes = '', startUrl = '' }) {
   assertBrowser(browser);
   if (!name) throw new Error('Profile name is required');
   const clean = safeName(name);
   const dir = profileDir(browser, clean);
   if (fs.existsSync(dir)) throw new Error(`Profile "${clean}" already exists for ${BROWSER_FOLDERS[browser]}`);
   ensureDir(dir);
+  if (!Array.isArray(extensions)) extensions = defaultExtensions(EXT_KIND[browser].toLowerCase());
   const meta = { name: clean, browser, proxyId, config, extensions, notes, startUrl, accounts: [], createdAt: new Date().toISOString(), lastUsed: null };
   writeJson(path.join(dir, META_FILE), meta);
   log.ok(`Created ${BROWSER_FOLDERS[browser]} profile "${clean}"`);

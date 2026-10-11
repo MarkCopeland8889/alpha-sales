@@ -54,12 +54,27 @@ Camoufox configurations.
 **AI CLIs.** `npm install @openai/codex @anthropic-ai/claude-code @google/gemini-cli opencode-ai`
 inside `Software/Frameworks`. Log each one in from Accounts → New CLI account → Log in.
 
+**Claude in Chrome (extension).** Software page → Claude in Chrome, or
+`node src/cli.js install claude-extension`. Downloads the extension from the Chrome Web Store
+(id `fcoeoabgfenejglbffodgkkbkcdhcgfn`, override with `CLAUDE_EXTENSION_ID`), unpacks it into
+`Software/Extension Copies/Chrome/Claude` with its store key so it keeps its store id, and makes
+it a default extension, so every new Chrome profile gets it. Sign in to Claude inside the
+extension once per profile.
+
+**Wispr Flow (voice dictation).** A desktop app for Windows and macOS, not a browser extension.
+Software page → Wispr Flow opens https://wisprflow.ai/downloads; run the installer and sign in.
+The Software page shows it as installed once it is in its usual install folder.
+
 ## Extension Copies
 
 Put unpacked extensions (or `.crx`/`.zip`) in `Software/Extension Copies/Chrome` and `.xpi`
 files in `Software/Extension Copies/Firefox`, or add them from the Extensions page. Chrome
 extensions are installed into a profile through the DevTools pipe (`Extensions.loadUnpacked`)
 because current Chrome builds ignore `--load-extension`.
+
+Extensions ticked as **Every new profile** on the Extensions page (stored in
+`Configurations/extension-defaults.json`) are added to each new profile automatically.
+**Add from Chrome Web Store** on the Extensions page fetches any store extension by id or link.
 
 ## Useful commands
 

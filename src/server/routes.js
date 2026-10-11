@@ -136,6 +136,12 @@ api.delete('/configs/:browser/:name', h(async (req) => configs.deleteConfig(req.
 api.get('/extensions', h(async () => extensions.listExtensions()));
 api.post('/extensions', h(async (req) => extensions.addExtension(req.body.kind, req.body.sourcePath, req.body.name)));
 api.delete('/extensions/:kind/:name', h(async (req) => extensions.removeExtension(req.params.kind, req.params.name)));
+api.post('/extensions/webstore', h(async (req) => {
+  const ext = await extensions.addFromWebStore(req.body.id, req.body.name);
+  if (req.body.default) extensions.setDefaultExtension('chrome', ext.name, true);
+  return ext;
+}));
+api.post('/extensions/:kind/:name/default', h(async (req) => ({ defaults: extensions.setDefaultExtension(req.params.kind, req.params.name, req.body?.on !== false) })));
 
 // ---- Accounts ----------------------------------------------------------------------------
 api.get('/accounts', h(async () => accounts.listAccounts()));

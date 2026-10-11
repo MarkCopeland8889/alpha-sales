@@ -30,7 +30,8 @@ export async function profiles(root, ctx) {
       body: h('div', {}, pick.el, h('p', { class: 'muted' }, 'Each profile is its own browser data folder under Profiles/<Browser>/<Profile>, with its own cookies, history and logins.')),
       actions: [{ label: 'Next', kind: 'primary', onClick: () => {
         const { browser } = pick.values();
-        setTimeout(() => formModal(`New ${info[browser].label} profile`, fieldsFor(browser, true), {}, async (v) => {
+        const defaults = exts.filter((e) => e.default && e.kind === (browser === 'chrome' ? 'chrome' : 'firefox')).map((e) => e.name);
+        setTimeout(() => formModal(`New ${info[browser].label} profile`, fieldsFor(browser, true), { extensions: defaults }, async (v) => {
           await api.post('/profiles', { browser, ...clean(v) });
           ctx.refresh();
         }), 0);
@@ -211,14 +212,26 @@ export async function extensions(root, ctx) {
     ctx.refresh();
   }, { submit: 'Add' });
 
+  const fromStore = () => formModal('Add from the Chrome Web Store', [
+    { name: 'id', label: 'Extension id or store link', required: true, placeholder: 'https://chromewebstore.google.com/detail/…/<id>' },
+    { name: 'name', label: 'Name', required: true, placeholder: 'e.g. Claude' },
+    { name: 'default', label: 'Add to every new Chrome profile', type: 'checkbox', value: true },
+  ], {}, async (v) => {
+    await api.post('/extensions/webstore', v);
+    ctx.refresh();
+  }, { submit: 'Download and add', success: 'Extension added' });
+
   root.append(
-    pageHeader('Extensions', 'Extension copies live in Software/Extension Copies. Pick them per profile on the Profiles page and they are installed into that profile when it opens.',
-      button('Add extension', add, { kind: 'primary' })),
+    pageHeader('Extensions', 'Extension copies live in Software/Extension Copies. Pick them per profile on the Profiles page and they are installed into that profile when it opens. Defaults are added to every new profile.',
+      button('Add from Chrome Web Store', fromStore), button('Add extension', add, { kind: 'primary' })),
     card(null, table([
       { label: 'Extension', render: (e) => h('div', {}, h('strong', {}, e.title), h('div', { class: 'muted' }, e.name)) },
       { label: 'For', render: (e) => badge(e.kind === 'chrome' ? 'Chrome' : 'Firefox family') },
       { label: 'Version', render: (e) => `${e.version} · MV${e.manifestVersion}` },
       { label: 'Id', render: (e) => (e.geckoId ? h('code', {}, e.geckoId) : '') },
+      { label: 'Every new profile', render: (e) => h('input', { type: 'checkbox', checked: Boolean(e.default), title: 'Add to every new profile', onchange: action(async (ev) => {
+        await api.post(`/extensions/${e.kind}/${encodeURIComponent(e.name)}/default`, { on: ev.target.checked });
+      }, { success: 'Saved' }) }) },
       { label: '', render: (e) => button('Remove', action(async () => {
         if (!(await confirmBox(`Remove "${e.title}" from Extension Copies? Profiles that list it will skip it.`))) return;
         await api.del(`/extensions/${e.kind}/${encodeURIComponent(e.name)}`);
