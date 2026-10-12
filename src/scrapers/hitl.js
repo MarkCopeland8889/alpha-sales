@@ -96,7 +96,9 @@ export function cancel(id, reason = 'Cancelled') {
 export async function detectChallenge(page) {
   try {
     const frames = page.frames ? page.frames().map((f) => f.url()) : [];
-    const frameHit = frames.find((u) => /recaptcha|hcaptcha|challenges\.cloudflare|turnstile|arkoselabs|funcaptcha|captcha-delivery|geo\.captcha/i.test(u));
+    // Invisible reCAPTCHA (size=invisible) runs in the background on LinkedIn pages and shows
+    // nothing to solve, so it is not a challenge. A real one shows up as a visible frame.
+    const frameHit = frames.find((u) => /recaptcha|hcaptcha|challenges\.cloudflare|turnstile|arkoselabs|funcaptcha|captcha-delivery|geo\.captcha/i.test(u) && !/[?&#]size=invisible\b/i.test(u));
     if (frameHit) return { kind: 'captcha', detail: new URL(frameHit).host };
     const url = typeof page.url === 'function' ? await page.url() : '';
     if (/\/checkpoint\/|\/challenge|captcha|\/authwall|\/uas\/login/i.test(url)) return { kind: 'challenge', detail: url };
