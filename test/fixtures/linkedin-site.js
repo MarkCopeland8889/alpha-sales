@@ -271,10 +271,27 @@ const rest = ${JSON.stringify(SEARCH_POSTS.slice(2).map(item))};
 document.getElementById('more').onclick = (e) => { document.getElementById('list').insertAdjacentHTML('beforeend', rest.join('')); e.target.remove(); };`);
 }
 
+// Clicking a job card shows the job in the side pane without loading a new page (the address
+// gains currentJobId), like LinkedIn's jobs search.
 function jobsSearch(start) {
   if (start > 0) return layout('Jobs', '<p>No matching jobs found. Try removing filters.</p>');
   const cards = Object.entries(JOBS).map(([id, j]) => `<li data-occludable-job-id="${id}" style="height:150px"><a href="/jobs/view/${id}/?trk=x">${esc(j.title)}</a><div>${esc(j.company)}</div><span>Easy Apply</span></li>`);
-  return layout('Jobs', `<div class="jobs-search-results-list" style="height:200px;overflow:auto"><ul>${cards.join('')}</ul></div>`);
+  return layout('Jobs', `<div class="jobs-search-results-list" style="height:200px;overflow:auto"><ul>${cards.join('')}</ul></div><div class="jobs-search__job-details--container"></div>`, `
+const jobs = ${JSON.stringify(JOBS)};
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+document.querySelector('.jobs-search-results-list').addEventListener('click', (e) => {
+  const a = e.target.closest('a[href*="/jobs/view/"]');
+  if (!a) return;
+  e.preventDefault();
+  const id = a.getAttribute('href').split('/jobs/view/')[1].split('/')[0]; const j = jobs[id];
+  setTimeout(() => {
+    const q = new URLSearchParams(location.search); q.set('currentJobId', id);
+    history.replaceState(null, '', location.pathname + '?' + q);
+    document.querySelector('.jobs-search__job-details--container').innerHTML = '<h2 class="job-details-jobs-unified-top-card__job-title"><a href="/jobs/view/' + id + '/">' + esc(j.title) + '</a></h2><a href="/company/' + j.slug + '/life/">' + esc(j.company) + '</a>'
+      + '<button onclick="hit(\\'apply\\')">Easy Apply</button><button onclick="hit(\\'save\\')">Save</button>'
+      + '<div id="job-details">' + esc(j.desc) + '<span id="jm" hidden>' + esc(j.more) + '</span></div><button onclick="jm.hidden=false;this.remove()">See more</button>';
+  }, 150);
+});`);
 }
 
 function jobPage(id) {

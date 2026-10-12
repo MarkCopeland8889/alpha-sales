@@ -312,7 +312,7 @@ export async function guardrails(root, ctx) {
     { name: 'maxConcurrentRuns', label: 'Runs at once on this computer', type: 'number' },
     { name: 'maxRunMinutes', label: 'Max minutes per run', type: 'number' },
     { name: 'minActionGapMs', label: 'Min gap between counted actions (ms)', type: 'number' },
-    { name: 'limits', label: 'Daily limits per action and account', type: 'json', rows: 10, help: 'Scrapers call ctx.action("name") before each counted action. "default" applies to names without their own limit.' },
+    { name: 'limits', label: 'Daily limits per action and account', type: 'json', rows: 10, help: 'Scrapers call ctx.action("name") before each counted action. perDay is the daily budget; minGapMs is the least time after the previous counted action. "default" applies to names without their own limit.' },
   ], settings);
   root.append(
     pageHeader('Guardrails', 'Safety limits for every run on this computer. The kill switch in the top bar stops every job and closes every browser immediately.',

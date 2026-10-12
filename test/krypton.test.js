@@ -9,7 +9,7 @@ import { db } from '../src/db/index.js';
 import { queueRun } from '../src/jobs/queue.js';
 import { saveJob } from '../src/jobs/index.js';
 import { createProfile } from '../src/profiles/index.js';
-import { saveGuardrails } from '../src/guardrails/index.js';
+import { saveGuardrails, DEFAULT_GUARDRAILS } from '../src/guardrails/index.js';
 import { freePort } from '../src/core/utils.js';
 import { ai } from '../src/ai/index.js';
 import { resolveSettings } from '../src/workflows/krypton/settings.js';
@@ -83,7 +83,7 @@ let user;
 test.before(async () => {
   user = await localLogin('tester');
   await onLogin(user);
-  saveGuardrails({ minActionGapMs: 0 });
+  saveGuardrails({ minActionGapMs: 0, limits: Object.fromEntries(Object.keys(DEFAULT_GUARDRAILS.limits).map((k) => [k, { minGapMs: 0 }])) });
 });
 test.after(() => shutdown());
 
@@ -246,6 +246,8 @@ test('Krypton runs test 1 end to end on a LinkedIn-like site', { skip: !HAS_BROW
   const jobDir = path.join(term, 'Jobs', fs.readdirSync(path.join(term, 'Jobs')).find((f) => f.startsWith('Remote Bookkeeper')));
   assert.match(fs.readFileSync(path.join(jobDir, 'Job text.txt'), 'utf8'), /Fully online, 15 hours a week/);
   assert.equal(fs.readFileSync(path.join(jobDir, 'Company URL.txt'), 'utf8'), `http://127.0.0.1:${port}/company/acme-plumbing/`);
+  assert.ok(!site.visits.some((v) => v.startsWith('/jobs/view/')), 'jobs are read from the side pane, not opened one page at a time');
+  assert.doesNotMatch(fs.readFileSync(path.join(jobDir, 'Job text.txt'), 'utf8'), /Staff Accountant/, 'only the pane, not the whole list');
 
   // Post search (with "load more") and groups (names and links only).
   assert.equal(json('Need a bookkeeper', 'Posts', '_results.json').length, 3);

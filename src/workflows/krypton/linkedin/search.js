@@ -24,7 +24,8 @@ export async function searchPeople(li, term, { maxPages = 0, onPage } = {}) {
 }
 
 // Jobs: one search per location; pages of 25 (&start=25*n). Returns job ids in listed order.
-export async function searchJobs(li, term, location, { maxJobs = 0, maxPages = 0 } = {}) {
+// onPage(ids) runs while each results page is open, so its jobs can be read from the side pane.
+export async function searchJobs(li, term, location, { maxJobs = 0, maxPages = 0, onPage } = {}) {
   const ids = [];
   const limit = maxPages > 0 ? Math.min(maxPages, 40) : 40;
   for (let n = 0; n < limit; n += 1) {
@@ -37,11 +38,12 @@ export async function searchJobs(li, term, location, { maxJobs = 0, maxPages = 0
       await li.pause(500, 1100);
     }
     const found = await li.evaluate(dom.jobIds, li.sel);
-    const fresh = found.filter((id) => !ids.includes(id));
+    const fresh = found.filter((id) => !ids.includes(id)).slice(0, maxJobs > 0 ? maxJobs - ids.length : undefined);
     if (!fresh.length) break;
     ids.push(...fresh);
     li.log.info(`Jobs "${term}"${location ? ` in ${location}` : ''} page ${n + 1}: ${fresh.length} jobs`);
-    if (maxJobs > 0 && ids.length >= maxJobs) return ids.slice(0, maxJobs);
+    await onPage?.(fresh);
+    if (maxJobs > 0 && ids.length >= maxJobs) break;
     if (found.length < 25) break; // a short page is the last page
   }
   return ids;

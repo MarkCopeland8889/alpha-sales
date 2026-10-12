@@ -18,7 +18,7 @@ import { createLinkedIn } from './linkedin/session.js';
 import { searchPeople, searchJobs, searchPosts, searchGroups } from './linkedin/search.js';
 import { readProfile } from './linkedin/profile.js';
 import { readPost, savePost } from './linkedin/post.js';
-import { readJob, saveJob } from './linkedin/job.js';
+import { readJob, readJobInPane, saveJob } from './linkedin/job.js';
 import { salesNavigator } from './linkedin/salesnav.js';
 import { writeReport } from './report.js';
 
@@ -163,28 +163,39 @@ export async function runKrypton(ctx, input) {
     if (s.collect_jobs) {
       for (const location of s.locations.length ? s.locations : ['']) {
         const key = location ? `_results ${location}.json` : '_results.json';
+        // Reads each listed job once: from the results page's side pane while that page is
+        // open (inPane), otherwise by opening the job's page.
+        const readJobs = async (ids, inPane) => {
+          let pane = inPane;
+          for (const id of ids) {
+            ctx.throwIfStopped();
+            await ctx.progress({ checkpoint: `"${term}" job ${st.jobs + 1}` });
+            const prev = seen.jobs[id];
+            if (prev) {
+              const target = [tf, 'Jobs', prev.parts.at(-1)];
+              if (!store.exists([...target, 'job.json'])) store.copy(prev.parts, target);
+              continue;
+            }
+            let job = pane ? await guarded(`Job ${id}`, () => readJobInPane(li, id)) : null;
+            if (pane && !job) {
+              pane = false; // the list may be gone now; open the rest of this page's jobs directly
+              note('Some jobs could not be read in the search list\'s side pane, so their pages were opened instead.');
+            }
+            job ||= await guarded(`Job ${id}`, () => readJob(li, id));
+            if (!job) continue;
+            const parts = [tf, 'Jobs', jobFolder(job)];
+            saveJob(store, parts, { ...job, term, location });
+            seen.jobs[id] = { parts, term, location };
+            saveSeen();
+            st.jobs += 1;
+          }
+        };
         let ids = store.readJson([tf, 'Jobs', key]);
         if (!ids) {
-          ids = await guarded(`Job search "${term}"${location ? ` in ${location}` : ''}`, () => searchJobs(li, term, location, { maxJobs: s.max_jobs_per_search })) || [];
+          ids = await guarded(`Job search "${term}"${location ? ` in ${location}` : ''}`, () => searchJobs(li, term, location, { maxJobs: s.max_jobs_per_search, onPage: (page) => readJobs(page, true) })) || [];
           store.json([tf, 'Jobs', key], ids);
         }
-        for (const [n, id] of ids.entries()) {
-          ctx.throwIfStopped();
-          await ctx.progress({ checkpoint: `"${term}" job ${n + 1}/${ids.length}` });
-          const prev = seen.jobs[id];
-          if (prev) {
-            const target = [tf, 'Jobs', prev.parts.at(-1)];
-            if (!store.exists([...target, 'job.json'])) store.copy(prev.parts, target);
-            continue;
-          }
-          const job = await guarded(`Job ${id}`, () => readJob(li, id));
-          if (!job) continue;
-          const parts = [tf, 'Jobs', jobFolder(job)];
-          saveJob(store, parts, { ...job, term, location });
-          seen.jobs[id] = { parts, term, location };
-          saveSeen();
-          st.jobs += 1;
-        }
+        await readJobs(ids, false); // after a resume: any listed job not read yet
       }
     }
 

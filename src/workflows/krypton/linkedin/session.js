@@ -101,7 +101,8 @@ export function createLinkedIn(ctx, settings) {
     await pause(400, 900);
   }
 
-  return { page, sel, settings, base: settings.linkedin_base_url, log, pause, evaluate, currentUrl, settle, visit, clickText, expandAll, scrollDown, scrollToEnd, closeDialog };
+  const action = (name) => ctx.action(name);
+  return { page, sel, settings, base: settings.linkedin_base_url, log, pause, evaluate, currentUrl, settle, visit, action, clickText, expandAll, scrollDown, scrollToEnd, closeDialog };
 }
 
 // "3d", "2w", "1mo", "1yr", "5h", "3 days ago" -> age in days (null when unknown).

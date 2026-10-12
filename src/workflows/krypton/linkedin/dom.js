@@ -377,8 +377,17 @@ export function jobIds(sel) {
   return ids;
 }
 
-export function jobDetails(sel) {
-  const main = document.querySelector('main') || document.body;
+// spec: { sel, roots } reads inside the first of `roots` found (the search list's side pane),
+// or null when none is on the page; without roots it reads the whole job page.
+export function jobDetails(spec) {
+  const { sel, roots } = spec;
+  let main = null;
+  for (const s of roots || []) {
+    main = document.querySelector(s);
+    if (main) break;
+  }
+  if (roots && !main) return null;
+  main ||= document.querySelector('main') || document.body;
   const pick = (list) => {
     for (const s of list) {
       const el = main.querySelector(s);

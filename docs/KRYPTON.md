@@ -64,8 +64,9 @@ Model tiers (editable per run):
      the bottom, all page text saved as is; featured items and websites; then the activity page
      ("load more" up to 10 times, stopping early once posts are older than a month) and every
      post back one month through the post processor.
-   - **Jobs**: one search per location, every page, each job opened, description expanded, full
-     page text and company link saved.
+   - **Jobs**: one search per location, every page, each job clicked in the results list and read
+     from the side pane (its page is opened only if the pane can't be read), description
+     expanded, full text and company link saved.
    - **Posts**: content search, "load more" up to 20 times, every post through the post processor.
    - **Groups**: names, links and the text shown in the results (never joined).
 3. **Sales Navigator** (when turned on): one lead search per ICP. Known filters are set by name
@@ -122,6 +123,8 @@ lists there replace the defaults. The readers also fall back on structure that r
 - Daily guardrails (Automation → Guardrails) cap profile views (80), search pages (150), post
   views (300) and job views (200) per account. When one is reached, Krypton stops that kind of
   reading, classifies what it has and says so in the report's Notes.
+- The same guardrails space LinkedIn page loads apart: at least 20 seconds before a profile, 15
+  before a search page and 12 before a post or job (`minGapMs`). A long run is slow on purpose.
 - LinkedIn's terms do not allow automated collection, and the run stores personal data about
   the people it reads. Keep limits conservative and keep the data only as long as you need it.
 

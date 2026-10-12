@@ -29,6 +29,7 @@ export const DEFAULT_SELECTORS = {
   reactionIcon: ['[data-test-reactions-icon-type]', 'img[class*="reactions-icon"]', 'img[class*="reaction-icon"]'],
   reactionsScroll: ['.artdeco-modal__content', '.social-details-reactors-modal__content', '[role="dialog"] [class*="content"]'],
   jobCard: ['[data-job-id]', '[data-occludable-job-id]', 'li.jobs-search-results__list-item', '.job-card-container'],
+  jobPane: ['.jobs-search__job-details--container', '.jobs-search__job-details', '.scaffold-layout__detail', '.jobs-details', '[class*="jobs-search__job-details"]'],
   jobDetails: ['#job-details', '.jobs-description__content', '.jobs-box__html-content', '.jobs-description', '.description__text'],
   jobTitle: ['.job-details-jobs-unified-top-card__job-title', '.jobs-unified-top-card__job-title', '.top-card-layout__title', 'h1'],
 };
