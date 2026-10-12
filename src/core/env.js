@@ -56,6 +56,8 @@ export const EDITABLE_KEYS = [
   ['VULPINE_PATH', 'Override path to the VulpineOS browser binary'],
   ['AHK_PATH', 'Override path to AutoHotkey v2 (AutoHotkey64.exe)'],
   ['PYTHON_PATH', 'Python 3.11+ used to create the Invisible Playwright venv'],
+  ['WHISPER_MODELS_DIR', 'Folder of ggml Whisper models for GPU Whisper (for example Whisper Desktop\'s folder)'],
+  ['WHISPER_GPU_URL', 'Download link for the GPU Whisper command line (Const-me Whisper cli.zip)'],
   ['ANTHROPIC_API_KEY', 'Claude API key', true],
   ['GEMINI_API_KEY', 'Gemini API key', true],
   ['ZAI_API_KEY', 'z.ai API key', true],

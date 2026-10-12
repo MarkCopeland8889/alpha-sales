@@ -30,10 +30,12 @@ human-in-the-loop.
 
 ## 4. Krypton (client generation & prospecting)
 
-The first platform workflow from the LinkedIn sample, as scrapers plus one job (see
-`docs/SCRAPERS.md`). Before building it, decide how it will respect each platform's terms of
-service and the privacy of the people whose data is collected (what is stored, for how long,
-and on what legal basis), and keep daily limits conservative on the Guardrails page.
+Built for LinkedIn and LinkedIn Sales Navigator (see `docs/KRYPTON.md`). Next steps:
+
+- Run test 1 on a real LinkedIn account and adjust `selectors.json` where LinkedIn's pages differ.
+- Groups beyond names and links (the workflow doc says "we will come back here").
+- The other platforms from the workflow doc (Facebook, Reddit, X, Upwork, Indeed, ...).
+- DOCX or PDF export of the report (Markdown and HTML today).
 
 ## 5. Later
 

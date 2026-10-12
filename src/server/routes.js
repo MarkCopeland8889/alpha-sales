@@ -30,6 +30,7 @@ import * as guardrails from '../guardrails/index.js';
 import * as sync from '../sync/rclone.js';
 import { softwareStatus, installSoftware } from '../software/index.js';
 import { apiToken } from './security.js';
+import { kryptonRouter } from '../workflows/krypton/api.js';
 
 const log = logger('api');
 export const api = express.Router();
@@ -100,6 +101,7 @@ api.post('/profiles/:browser/:name/open', h(async (req) => {
   return s.info();
 }));
 
+api.post('/profiles/:browser/:name/sign-in', h(async (req) => browsers.openForSignIn({ browser: req.params.browser, profile: req.params.name, urls: [].concat(req.body?.urls || []).filter(Boolean), proxyId: req.body?.proxyId })));
 api.get('/sessions', h(async () => browsers.listSessions()));
 api.post('/sessions/:id/close', h(async (req) => browsers.closeSession(req.params.id)));
 api.post('/sessions/:id/goto', h(async (req) => {
@@ -135,6 +137,12 @@ api.delete('/configs/:browser/:name', h(async (req) => configs.deleteConfig(req.
 api.get('/extensions', h(async () => extensions.listExtensions()));
 api.post('/extensions', h(async (req) => extensions.addExtension(req.body.kind, req.body.sourcePath, req.body.name)));
 api.delete('/extensions/:kind/:name', h(async (req) => extensions.removeExtension(req.params.kind, req.params.name)));
+api.post('/extensions/webstore', h(async (req) => {
+  const ext = await extensions.addFromWebStore(req.body.id, req.body.name);
+  if (req.body.default) extensions.setDefaultExtension('chrome', ext.name, true);
+  return ext;
+}));
+api.post('/extensions/:kind/:name/default', h(async (req) => ({ defaults: extensions.setDefaultExtension(req.params.kind, req.params.name, req.body?.on !== false) })));
 
 // ---- Accounts ----------------------------------------------------------------------------
 api.get('/accounts', h(async () => accounts.listAccounts()));
@@ -189,6 +197,9 @@ api.post('/runs/:id/resume', h(async (req) => {
   const run = await jobs.getRun(uid(), req.params.id);
   return queueRun(uid(), { jobId: run.job_id || undefined, spec: run.job_id ? undefined : run.spec, label: `${run.label} (resumed)`, resumeFrom: run.id });
 }));
+
+// ---- Workflows ---------------------------------------------------------------------------
+api.use('/krypton', kryptonRouter({ h, uid, queueRun }));
 
 // ---- Human-in-the-loop, guardrails -------------------------------------------------------
 api.get('/hitl', h(async () => ({

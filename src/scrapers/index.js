@@ -85,9 +85,10 @@ export async function getScraper(name) {
 export function prepareInput(def, input = {}) {
   const out = { ...input };
   for (const [key, spec] of Object.entries(def.inputs || {})) {
-    if (out[key] === undefined || out[key] === '') {
+    if (out[key] === undefined || out[key] === null || out[key] === '') {
       if (spec.default !== undefined) out[key] = spec.default;
       else if (spec.required) throw new Error(`Scraper "${def.name}" needs input "${key}"`);
+      else delete out[key];
     }
     if (spec.type === 'number' && out[key] !== undefined) out[key] = Number(out[key]);
     if (spec.type === 'boolean' && typeof out[key] === 'string') out[key] = out[key] === 'true';

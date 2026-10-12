@@ -62,3 +62,32 @@ test('web and OAuth accounts are stored under Accounts/<Platform>/<username>', (
   assert.equal(listAccounts().length, 2);
   assert.throws(() => saveAccount({ type: 'oauth', platform: 'X', username: 'y', tool: 'nope' }), /CLI tool/);
 });
+
+test('a sign-in window opens plain Chrome on the profile, with no automation, and holds the profile', async (t) => {
+  const { openForSignIn, openBrowser, listSessions, closeSession, isProfileOpen } = await import('../src/browsers/index.js');
+  const { readLock } = await import('../src/profiles/index.js');
+  const { waitUntil } = await import('./helpers.js');
+  // A stand-in Chrome that records its arguments and stays open until closed.
+  const dir = fs.mkdtempSync(path.join(HOME, 'fake-chrome-'));
+  const exe = path.join(dir, 'chrome');
+  const argsFile = path.join(dir, 'args.txt');
+  fs.writeFileSync(exe, `#!/bin/sh\nprintf '%s\\n' "$@" > "${argsFile}"\nexec sleep 30\n`, { mode: 0o755 });
+  const before = process.env.CHROME_PATH;
+  process.env.CHROME_PATH = exe;
+  t.after(() => { process.env.CHROME_PATH = before; });
+
+  const p = createProfile({ browser: 'chrome', name: 'sign-in test' });
+  const info = await openForSignIn({ browser: 'chrome', profile: 'sign-in test', urls: ['https://www.linkedin.com/login', 'https://claude.ai/login'] });
+  const args = (await waitUntil(() => fs.existsSync(argsFile) && fs.readFileSync(argsFile, 'utf8'))).trim().split('\n');
+  assert.ok(args.includes(`--user-data-dir=${p.path}`));
+  assert.deepEqual(args.slice(-2), ['https://www.linkedin.com/login', 'https://claude.ai/login']);
+  assert.ok(!args.some((a) => /remote-debugging|enable-automation|extension-debugging/.test(a)), args.join(' '));
+
+  assert.ok(listSessions().some((s) => s.id === info.id && s.signIn));
+  assert.ok(isProfileOpen('chrome', 'sign-in test'));
+  await assert.rejects(openBrowser({ browser: 'chrome', profile: 'sign-in test', lockWaitMs: 0 }), /sign-in window/);
+
+  await closeSession(info.id);
+  await waitUntil(() => !readLock('chrome', 'sign-in test'));
+  assert.ok(!listSessions().some((s) => s.id === info.id));
+});

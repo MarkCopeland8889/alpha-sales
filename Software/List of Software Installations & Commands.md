@@ -54,12 +54,43 @@ Camoufox configurations.
 **AI CLIs.** `npm install @openai/codex @anthropic-ai/claude-code @google/gemini-cli opencode-ai`
 inside `Software/Frameworks`. Log each one in from Accounts → New CLI account → Log in.
 
+**Claude in Chrome (extension).** Software page → Claude in Chrome, or
+`node src/cli.js install claude-extension`. Downloads the extension from the Chrome Web Store
+(id `fcoeoabgfenejglbffodgkkbkcdhcgfn`, override with `CLAUDE_EXTENSION_ID`), unpacks it into
+`Software/Extension Copies/Chrome/Claude` with its store key so it keeps its store id, and makes
+it a default extension, so every new Chrome profile gets it. Sign in to Claude inside the
+extension once per profile.
+
+**Whisper (OpenAI speech to text).** Software page → Whisper, or `node src/cli.js install whisper`.
+Needs Python 3.11 or newer. Creates a venv in `Software/Whisper/venv`, installs `openai-whisper`
+(which brings PyTorch) and `imageio-ffmpeg`, and copies that ffmpeg into the venv as `ffmpeg`,
+since Whisper calls it by name. Run it with the launcher, which puts both on PATH:
+`Software/Whisper/whisper.cmd audio.mp3 --model turbo` on Windows (`Software/Whisper/whisper`
+elsewhere). Each model downloads on first use to `~/.cache/whisper`.
+
+**Whisper on the GPU (Windows).** Software page → Whisper on the GPU, or
+`node src/cli.js install whisper-gpu`. Downloads Const-me's Whisper command line (`main.exe` and
+`Whisper.dll`, the engine behind Whisper Desktop) into `Software/Whisper-GPU/cli`. It runs ggml
+models through DirectX 11 on any GPU, Intel Arc included. Set `WHISPER_MODELS_DIR` in Settings
+to an existing folder of `ggml-*.bin` models (such as Whisper Desktop's); its models are used
+alongside `Software/Whisper-GPU/models`, where `ggml-base.en.bin` is downloaded if there is no
+base model. This engine cannot load quantized models (`ggml-*-q8_0.bin`, `-q5_1`), so those are
+skipped. `WHISPER_GPU_URL` overrides the download link.
+
+**Transcribing.** `node src/cli.js transcribe <file> [--model base] [--language en] [--cpu|--gpu]`
+uses GPU Whisper when it is installed, else the CPU copy, and prints the text with the engine
+and time taken. Code can call `transcribe()` from `src/ai/whisper.js`.
+
 ## Extension Copies
 
 Put unpacked extensions (or `.crx`/`.zip`) in `Software/Extension Copies/Chrome` and `.xpi`
 files in `Software/Extension Copies/Firefox`, or add them from the Extensions page. Chrome
 extensions are installed into a profile through the DevTools pipe (`Extensions.loadUnpacked`)
 because current Chrome builds ignore `--load-extension`.
+
+Extensions ticked as **Every new profile** on the Extensions page (stored in
+`Configurations/extension-defaults.json`) are added to each new profile automatically.
+**Add from Chrome Web Store** on the Extensions page fetches any store extension by id or link.
 
 ## Useful commands
 

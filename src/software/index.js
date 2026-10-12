@@ -9,6 +9,9 @@
 //   rclone      rclone binary for Google Drive sync
 //   ai-clis     Codex, Claude Code, Gemini CLI and OpenCode, installed into Software/Frameworks
 //   autohotkey  prerequisite on Windows (checked, installed with winget on request)
+//   claude-extension  Claude in Chrome, from the Chrome Web Store, added to every new Chrome profile
+//   whisper     OpenAI Whisper speech to text, in its own Python venv with ffmpeg beside it
+//   whisper-gpu Whisper on the GPU on Windows (Const-me's DirectCompute command line, ggml models)
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -25,6 +28,7 @@ import { firefoxInstalled, camoufoxExecutable, vulpineExecutable } from '../brow
 import { venvPython } from '../browsers/invisible.js';
 import { rcloneExe } from '../sync/rclone.js';
 import { cliInstalled, CLI_TOOLS } from '../ai/cli-tools.js';
+import { addFromWebStore, findExtension, setDefaultExtension } from '../extensions/index.js';
 
 const log = logger('software');
 const running = new Map();
@@ -142,7 +146,7 @@ async function findPython() {
     const m = `${res.stdout}${res.stderr}`.match(/Python (\d+)\.(\d+)/);
     if (res.ok && m && (Number(m[1]) > 3 || Number(m[2]) >= 11)) return c === 'py' ? ['py', '-3'] : [c];
   }
-  throw new Error('Python 3.11 or newer is required for Invisible Playwright. Install it or set PYTHON_PATH.');
+  throw new Error('Python 3.11 or newer is required (Invisible Playwright and Whisper). Install it or set PYTHON_PATH.');
 }
 
 async function installInvisible() {
@@ -199,6 +203,99 @@ async function installAutoHotkey() {
   openTerminal('winget install --id AutoHotkey.AutoHotkey -e', { title: 'Install AutoHotkey v2' });
 }
 
+// Claude in Chrome. Override the id with CLAUDE_EXTENSION_ID if the store listing changes.
+export const CLAUDE_EXTENSION_ID = process.env.CLAUDE_EXTENSION_ID || 'fcoeoabgfenejglbffodgkkbkcdhcgfn';
+
+async function installClaudeExtension() {
+  const ext = await addFromWebStore(CLAUDE_EXTENSION_ID, 'Claude');
+  if (!/claude/i.test(ext.title)) log.warn(`The downloaded extension is called "${ext.title}"; check CLAUDE_EXTENSION_ID`);
+  setDefaultExtension('chrome', ext.name, true);
+}
+
+// OpenAI Whisper (speech to text). Its own venv in Software/Whisper, with an ffmpeg binary
+// (from imageio-ffmpeg) copied into the venv, and a `whisper` launcher that puts both on PATH.
+const whisperBin = () => path.join(SOFTWARE.whisper, 'venv', IS_WINDOWS ? 'Scripts' : 'bin');
+export const whisperLauncher = () => path.join(SOFTWARE.whisper, IS_WINDOWS ? 'whisper.cmd' : 'whisper');
+
+function whisperStatus() {
+  const bin = whisperBin();
+  const ready = [IS_WINDOWS ? 'whisper.exe' : 'whisper', IS_WINDOWS ? 'ffmpeg.exe' : 'ffmpeg'].every((f) => fs.existsSync(path.join(bin, f)));
+  return { installed: ready && fs.existsSync(whisperLauncher()), path: ready ? whisperLauncher() : null };
+}
+
+async function installWhisper() {
+  const bin = whisperBin();
+  const python = path.join(bin, IS_WINDOWS ? 'python.exe' : 'python');
+  if (!fs.existsSync(python)) {
+    const [py, ...pre] = await findPython();
+    ensureDir(SOFTWARE.whisper);
+    const res = await run(py, [...pre, '-m', 'venv', path.join(SOFTWARE.whisper, 'venv')]);
+    if (!res.ok) throw new Error(`Could not create the Python venv: ${res.stderr}`);
+  }
+  let res = await run(python, ['-m', 'pip', 'install', '--upgrade', 'pip', 'openai-whisper', 'imageio-ffmpeg'], { timeout: 40 * 60000 });
+  if (!res.ok) throw new Error(`pip install failed: ${res.stderr.slice(-800)}`);
+  // Whisper calls `ffmpeg` by name, so the bundled binary is copied in under that name.
+  res = await run(python, ['-c', 'import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())'], { quiet: true });
+  if (!res.ok) throw new Error(`ffmpeg was not found: ${res.stderr.slice(-800)}`);
+  const ffmpeg = path.join(bin, IS_WINDOWS ? 'ffmpeg.exe' : 'ffmpeg');
+  fs.copyFileSync(res.stdout.trim(), ffmpeg);
+  if (IS_WINDOWS) {
+    fs.writeFileSync(whisperLauncher(), '@echo off\r\nset "PATH=%~dp0venv\\Scripts;%PATH%"\r\n"%~dp0venv\\Scripts\\whisper.exe" %*\r\n');
+  } else {
+    fs.chmodSync(ffmpeg, 0o755);
+    fs.writeFileSync(whisperLauncher(), '#!/bin/sh\nd="$(cd "$(dirname "$0")" && pwd)"\nPATH="$d/venv/bin:$PATH" exec "$d/venv/bin/whisper" "$@"\n', { mode: 0o755 });
+  }
+  log.ok('Installed Whisper into Software/Whisper', { launcher: whisperLauncher() });
+}
+
+// Whisper on the GPU (Windows): Const-me's Whisper command line (main.exe and Whisper.dll, the
+// engine behind Whisper Desktop). It runs ggml models through DirectCompute on any DirectX 11
+// GPU, Intel Arc included. Models come from WHISPER_MODELS_DIR (such as Whisper Desktop's
+// folder) and Software/Whisper-GPU/models, where the installer adds ggml-base.en if there is
+// no base model. The engine cannot load quantized models (ggml-*-q8_0.bin), so they are skipped.
+const WHISPER_GPU_URL = () => config.get('WHISPER_GPU_URL', 'https://github.com/Const-me/Whisper/releases/download/1.12.0/cli.zip');
+const WHISPER_GPU_MODEL = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin';
+
+function findFile(dir, name, depth = 3) {
+  if (!fs.existsSync(dir)) return null;
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isFile() && e.name.toLowerCase() === name) return p;
+    if (e.isDirectory() && depth > 0) {
+      const found = findFile(p, name, depth - 1);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+export const whisperGpuExe = () => findFile(path.join(SOFTWARE.whisperGpu, 'cli'), 'main.exe');
+const ownModels = () => path.join(SOFTWARE.whisperGpu, 'models');
+export function whisperGpuModels() {
+  const dirs = [...new Set([config.get('WHISPER_MODELS_DIR'), ownModels()].filter(Boolean))];
+  return dirs.flatMap((dir) => (fs.existsSync(dir) ? fs.readdirSync(dir) : [])
+    .filter((f) => /^ggml-.+\.bin$/i.test(f) && !/-q\d/i.test(f))
+    .map((f) => path.join(dir, f)));
+}
+
+async function installWhisperGpu() {
+  if (!IS_WINDOWS) throw new Error('GPU Whisper uses DirectCompute and runs on Windows only. Use Whisper (CPU) on this computer.');
+  const tmp = tmpDir();
+  try {
+    const zip = await download(WHISPER_GPU_URL(), path.join(tmp, 'cli.zip'));
+    const dest = path.join(SOFTWARE.whisperGpu, 'cli');
+    fs.rmSync(dest, { recursive: true, force: true });
+    await extract7z(zip, dest);
+    if (!whisperGpuExe()) throw new Error(`main.exe was not found in ${WHISPER_GPU_URL()}`);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+  if (!whisperGpuModels().some((m) => /^ggml-base/i.test(path.basename(m)))) {
+    await download(WHISPER_GPU_MODEL, path.join(ownModels(), 'ggml-base.en.bin'));
+  }
+  log.ok('Installed GPU Whisper into Software/Whisper-GPU', { exe: whisperGpuExe(), models: whisperGpuModels().map((m) => path.basename(m)) });
+}
+
 export const SOFTWARE_ITEMS = {
   chrome: { label: 'Google Chrome', install: installChrome, status: () => { const p = findChrome(); return { installed: Boolean(p), path: p, inRepo: isInRepo(p) }; } },
   firefox: { label: 'Firefox (Playwright build)', install: installFirefox, status: () => ({ installed: firefoxInstalled() }) },
@@ -215,6 +312,17 @@ export const SOFTWARE_ITEMS = {
     },
   },
   autohotkey: { label: 'AutoHotkey v2 (prerequisite)', install: installAutoHotkey, status: () => { const p = findAutoHotkey(); return { installed: Boolean(p), path: p, windowsOnly: true }; } },
+  'claude-extension': {
+    label: 'Claude in Chrome (extension, added to every new Chrome profile)',
+    install: installClaudeExtension,
+    status: () => { const e = findExtension('chrome', 'Claude'); return { installed: Boolean(e), path: e?.path ?? null, version: e?.version ?? null }; },
+  },
+  whisper: { label: 'Whisper (OpenAI speech to text)', install: installWhisper, status: whisperStatus },
+  'whisper-gpu': {
+    label: 'Whisper on the GPU (Windows, DirectX 11)',
+    install: installWhisperGpu,
+    status: () => { const p = whisperGpuExe(); return { installed: Boolean(p) && whisperGpuModels().length > 0, path: p, models: whisperGpuModels().map((m) => path.basename(m)), windowsOnly: true }; },
+  },
 };
 
 export function softwareStatus() {
@@ -251,7 +359,7 @@ export async function installSoftware(id) {
 }
 
 export async function installAll() {
-  for (const id of ['rclone', 'chrome', 'firefox', 'camoufox', 'invisible', 'ai-clis']) {
+  for (const id of ['rclone', 'chrome', 'firefox', 'camoufox', 'invisible', 'ai-clis', 'claude-extension']) {
     try {
       await installSoftware(id);
     } catch {
