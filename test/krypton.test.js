@@ -31,7 +31,7 @@ function answer(t) {
     }];
   }
   if (/Describe exactly which job listings qualify/.test(t)) return { exact_match: ['Remote bookkeeper'], similar: ['Staff accountant'], disqualifiers: ['Bookkeeping firms hiring'], signals: ['Remote'] };
-  if (/Keep every person who does NOT appear to provide/.test(t)) {
+  if (/Return ALL that do not appear to provide the service/.test(t)) {
     return [...t.matchAll(/^\[(\d+)\] (.+)$/gm)].filter((m) => !/Bookkeeper|CPA/.test(m[2])).map((m) => ({ id: Number(m[1]), intent: `Owner of a small business (${m[2]})` }));
   }
   if (/what are the key indicators/.test(t)) return ['Growing small business', 'Tax season stress'];
@@ -113,6 +113,11 @@ test('post ages: LinkedIn date labels to days', () => {
   assert.ok(ageInDays('5h') < 1);
   assert.equal(ageInDays('3 days ago'), 3);
   assert.equal(ageInDays(''), null);
+  // The 2026 activity page shows absolute dates.
+  const ago = (d) => new Date(Date.now() - d * 86400000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  assert.equal(Math.round(ageInDays(ago(20))), 20);
+  assert.ok(ageInDays('Jun 17, 2023') > 800);
+  assert.equal(ageInDays('Feed post'), null);
 });
 
 test('report HTML keeps links with underscores and escapes text', () => {
@@ -190,6 +195,30 @@ test('Krypton runs test 1 end to end on a LinkedIn-like site', { skip: !HAS_BROW
   assert.ok(fs.existsSync(path.join(jane, 'Profile image.jpg')));
   assert.ok(fs.existsSync(path.join(jane, 'Header image.jpg')));
   assert.match(fs.readFileSync(path.join(jane, 'websites.txt'), 'utf8'), /janesbakery\.example/);
+  // Dana's profile is the 2026 layout: name without the "(12)" count, headline after the
+  // pronouns and degree, the largest photo and cover, the website behind /safety/go/, About
+  // built on scroll and expanded, and the side rail left out of the profile text.
+  const danaDir = path.join(term, 'People', 'Dana Dental (dana-dental)');
+  const danaRec = JSON.parse(fs.readFileSync(path.join(danaDir, 'profile.json'), 'utf8'));
+  assert.equal(danaRec.name, 'Dana Dental');
+  assert.equal(danaRec.headline, 'Dentist and practice owner');
+  assert.deepEqual(danaRec.websites, ['https://dana-dental.example']);
+  assert.ok(site.visits.includes('/img/photo-dana-dental.jpg') && site.visits.includes('/img/header-dana-dental.jpg'), 'largest srcset images');
+  assert.ok(fs.existsSync(path.join(danaDir, 'Profile image.jpg')) && fs.existsSync(path.join(danaDir, 'Header image.jpg')));
+  const danaText = fs.readFileSync(path.join(danaDir, 'Profile text.txt'), 'utf8');
+  assert.match(danaText, /paperwork is piling up/);
+  assert.doesNotMatch(danaText, /People you may know/);
+  assert.match(fs.readFileSync(path.join(danaDir, 'Page text.txt'), 'utf8'), /People you may know/);
+  assert.equal(danaRec.posts.length, 1, 'her 3w post');
+  // Her post page is the 2026 layout too: counts read from inside the buttons, nothing clicked.
+  const danaPostDir = path.join(danaDir, 'Posts', fs.readdirSync(path.join(danaDir, 'Posts')).find((f) => f.includes('Patients first')));
+  const danaPost = JSON.parse(fs.readFileSync(path.join(danaPostDir, 'post.json'), 'utf8'));
+  assert.equal(danaPost.author, 'Dana Dental');
+  assert.match(danaPost.authorUrl, /\/in\/dana-dental\/$/);
+  assert.match(danaPost.date, /^[A-Z][a-z]{2} \d{1,2}, \d{4}$/);
+  assert.match(danaPost.caption, /tax season stress/);
+  assert.deepEqual(danaPost.metrics, { reactions: 3, comments: 0, reposts: 0 });
+  assert.ok(site.visits.includes('/img/post-1101.jpg') && fs.existsSync(path.join(danaPostDir, 'Media 1.jpg')), 'largest post image');
   const janeRec = JSON.parse(fs.readFileSync(path.join(jane, 'profile.json'), 'utf8'));
   assert.equal(janeRec.posts.length, 3, 'posts dated 2d, 1w and 1mo; the 2mo post is skipped');
   assert.ok(!fs.readdirSync(path.join(jane, 'Posts')).some((f) => f.includes('too old')));
@@ -246,7 +275,7 @@ test('Krypton runs test 1 end to end on a LinkedIn-like site', { skip: !HAS_BROW
   assert.deepEqual(jobsLv.map((j) => [j.id, j.level]), [['3001', 1], ['3002', 2], ['3003', 3]]);
   const tierOf = (re) => calls.filter((c) => re.test(c.text)).map((c) => `${c.model}/${c.reasoning}`);
   assert.deepEqual([...new Set(tierOf(/build the best possible ideal customer profiles/))], ['claude-opus-5-5/high']);
-  assert.deepEqual([...new Set(tierOf(/Keep every person who does NOT/))], ['claude-sonnet-5-5/medium']);
+  assert.deepEqual([...new Set(tierOf(/Return ALL that do not appear to provide/))], ['claude-sonnet-5-5/medium']);
   assert.deepEqual([...new Set(tierOf(/looking at LinkedIn profiles/))], ['claude-opus-5-5/high']);
   assert.deepEqual([...new Set(tierOf(/Visible controls:/))], ['claude-haiku-5-5/medium']);
   const profilePrompt = calls.find((c) => /looking at LinkedIn profiles/.test(c.text)).text;

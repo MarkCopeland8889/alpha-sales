@@ -111,6 +111,14 @@ export function ageInDays(label) {
   if (/\bnow\b|\bjust\b/.test(s)) return 0;
   const iso = s.match(/\d{4}-\d{2}-\d{2}/);
   if (iso) return Math.max(0, (Date.now() - Date.parse(iso[0])) / 86400000);
+  // The 2026 activity page shows dates such as "Jun 17, 2023" (the year is left out this year).
+  const md = s.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:,?\s+(\d{4}))?\b/);
+  if (md) {
+    const now = new Date();
+    let d = new Date(`${md[1]} ${md[2]}, ${md[3] || now.getFullYear()}`);
+    if (!md[3] && d > now) d = new Date(`${md[1]} ${md[2]}, ${now.getFullYear() - 1}`);
+    if (!Number.isNaN(d.getTime())) return Math.max(0, (now - d) / 86400000);
+  }
   const m = s.match(/(\d+)\s*(mo|months?|yrs?|years?|y|w|wks?|weeks?|d|days?|h|hrs?|hours?|m|mins?|minutes?|s|secs?|seconds?)\b/);
   if (!m) return null;
   const n = Number(m[1]);

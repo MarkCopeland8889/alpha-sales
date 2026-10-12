@@ -15,9 +15,9 @@ export const DEFAULT_SELECTORS = {
   profileImage: ['img.pv-top-card-profile-picture__image--show', 'img.pv-top-card-profile-picture__image', 'img[class*="profile-picture"]', 'img[class*="profile-photo"]'],
   headerImage: ['img#profile-background-image-target-image', 'img[class*="profile-background-image"]', 'img[class*="background"]', 'img[class*="banner"]'],
   headline: ['.text-body-medium.break-words', '[data-generated-suggestion-target]', '.pv-text-details__left-panel .text-body-medium'],
-  postContainer: ['[data-urn^="urn:li:activity:"]', '[data-urn^="urn:li:ugcPost:"]', '[data-urn^="urn:li:share:"]', '.feed-shared-update-v2'],
+  postContainer: ['[data-urn^="urn:li:activity:"]', '[data-urn^="urn:li:ugcPost:"]', '[data-urn^="urn:li:share:"]', '.feed-shared-update-v2', '[role="listitem"][componentkey*="FeedType_FEED_DETAIL"]'],
   postActor: ['.update-components-actor__title', '.update-components-actor__name', '.feed-shared-actor__name'],
-  postText: ['.update-components-text', '.feed-shared-update-v2__description', '.feed-shared-inline-show-more-text', '.feed-shared-text'],
+  postText: ['.update-components-text', '.feed-shared-update-v2__description', '.feed-shared-inline-show-more-text', '.feed-shared-text', '[data-testid="expandable-text-box"]'],
   postDate: ['.update-components-actor__sub-description', '.feed-shared-actor__sub-description'],
   commentItem: ['article.comments-comment-entity', 'article.comments-comment-item', '.comments-comment-item', '.comments-comment-entity'],
   commentAuthorName: ['.comments-comment-meta__description-title', '.comments-post-meta__name-text', '.comments-comment-meta__actor'],
@@ -35,14 +35,15 @@ export const DEFAULT_SELECTORS = {
 
 // Text and aria-label patterns (regular expressions, case-insensitive).
 export const DEFAULT_PATTERNS = {
-  seeMore: '^(…|\\.\\.\\.)?\\s*(see|show) more$|^…more$|click to see more description',
+  seeMore: '^(…|\\.\\.\\.)?\\s*(see|show) more$|^(…|\\.\\.\\.)\\s*more$|click to see more description',
   showMoreResults: '^show more results$|^load more$|^see more results$|^show more$',
   openComments: '^\\d[\\d,.]*[km]?\\s+comments?$',
   loadMoreComments: 'load more comments|load previous comments|see more comments|show more comments',
   reactionsCount: '^(?!.*\\bmenu\\b).*(\\b\\d[\\d,.]*[km]?\\s+reactions?\\b|\\band \\d[\\d,.]* others?\\b)',
   noResults: 'no results found|try removing filters|we couldn.t find',
   // Never click anything that sends, applies, connects or reacts. Krypton only reads.
-  forbidden: '\\b(easy apply|apply|connect|message|follow|join|send|invite|repost|withdraw|accept|endorse|subscribe|save to list|save search|unsave)\\b|^(like|celebrate|support|love|insightful|funny|comment|save)$',
+  // The 2026 layout's like button is "Reaction button state: …" and shows only the count.
+  forbidden: '\\b(easy apply|apply|connect|message|follow|join|send|invite|repost|withdraw|accept|endorse|subscribe|save to list|save search|unsave)\\b|^(like|celebrate|support|love|insightful|funny|comment|save)$|reaction button|reactions menu|^react\\b',
 };
 
 let cache = null;

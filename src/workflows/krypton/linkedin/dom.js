@@ -106,8 +106,28 @@ export function peopleResults(sel) {
 }
 
 export function profileTop(sel) {
+  // Links on the 2026 pages go through /safety/go/?url=<real address>. (Each reader runs in the
+  // page on its own, so helpers live inside it.)
+  const outUrl = (href) => {
+    try {
+      const u = new URL(href, location.href);
+      const real = /\/safety\/go\/?$/.test(u.pathname) && u.searchParams.get('url');
+      return real ? (/^https?:\/\//i.test(real) ? real : `https://${real}`) : u.href;
+    } catch {
+      return null;
+    }
+  };
+  // The largest copy in an <img>'s srcset (LinkedIn serves 100px to 800px versions).
+  const bestSrc = (img) => {
+    if (!img) return null;
+    const set = (img.getAttribute('srcset') || '').split(',').map((x) => x.trim().split(/\s+/)).filter(([u]) => u)
+      .map(([u, w]) => [u, Number.parseInt(w, 10) || 0]).sort((a, b) => b[1] - a[1]);
+    const url = set[0]?.[0] || img.getAttribute('src');
+    return url && !url.startsWith('data:') ? new URL(url, location.href).href : null;
+  };
   const main = document.querySelector('main') || document.body;
-  const top = main.querySelector('section') || main;
+  // 2026 layout (SDUI): obfuscated classes, the top card is [componentkey$="Topcard"] with an h2 name.
+  const top = document.querySelector('[componentkey$="Topcard"]') || main.querySelector('section') || main;
   const pick = (list, scope = top) => {
     for (const s of list) {
       const el = scope.querySelector(s);
@@ -115,37 +135,57 @@ export function profileTop(sel) {
     }
     return null;
   };
-  const name = (top.querySelector('h1')?.innerText || document.title.split('|')[0] || '').trim();
-  const header = pick(sel.headerImage);
-  let photo = pick(sel.profileImage);
+  const heading = top.querySelector('h1') || top.querySelector('h2');
+  const name = ((heading?.innerText || '').trim() || document.title.split('|')[0]).replace(/^\(\d+\)\s*/, '').trim();
+  const header = top.querySelector('img[alt="Cover photo"]') || pick(sel.headerImage);
+  let photo = top.querySelector('[aria-label="Profile photo"] img, [componentkey="topcard-logo-image-referencekey"] img') || pick(sel.profileImage);
   if (!photo && name) photo = [...top.querySelectorAll('img')].find((i) => i !== header && i.alt && i.alt.includes(name)) || null;
-  const src = (img) => (img && img.src && !img.src.startsWith('data:') ? img.src : null);
-  return {
-    name,
-    headline: (pick(sel.headline)?.innerText || '').trim(),
-    photoUrl: src(photo),
-    headerUrl: src(header),
-    hasActivity: Boolean(document.querySelector('#activity, a[href*="/recent-activity/"]')),
-  };
+  let headline = (pick(sel.headline)?.innerText || '').trim();
+  if (!headline && heading) {
+    // The first line after the name that is not pronouns ("She/Her") or the degree ("· 2nd").
+    const skip = /^[·•]|^(she|he|they|ze|xe)\s*\/\s*\w+$|^\d+(st|nd|rd|th)\+?$/i;
+    const after = [...top.querySelectorAll('p')].filter((el) => !heading.contains(el) && (heading.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING));
+    headline = after.map((el) => (el.innerText || '').trim()).find((t) => t.length > 2 && !skip.test(t)) || '';
+  }
+  const websites = [...new Set([...top.querySelectorAll('a[href*="/safety/go/"]')].map((a) => outUrl(a.href)).filter(Boolean))];
+  const hasActivity = Boolean(document.querySelector('#activity, a[href*="/recent-activity/"], [componentkey$="Activity"]'));
+  return { name, headline, photoUrl: bestSrc(photo), headerUrl: bestSrc(header), websites, hasActivity };
+}
+
+export function hasActivity() {
+  return Boolean(document.querySelector('#activity, a[href*="/recent-activity/"], [componentkey$="Activity"]'));
+}
+
+// The profile itself, without navigation, "People you may know" and the footer.
+export function profileText() {
+  const el = document.querySelector('section[aria-label="Primary content"]') || document.querySelector('main') || document.body;
+  return (el.innerText || '').trim();
 }
 
 export function featured() {
-  const sections = [...document.querySelectorAll('main section')];
-  const sec = sections.find((s) => s.querySelector('#featured') || /^\s*featured\s*$/im.test(s.querySelector('h2, h3')?.innerText || ''));
+  // Links on the 2026 pages go through /safety/go/?url=<real address>. (Each reader runs in the
+  // page on its own, so helpers live inside it.)
+  const outUrl = (href) => {
+    try {
+      const u = new URL(href, location.href);
+      const real = /\/safety\/go\/?$/.test(u.pathname) && u.searchParams.get('url');
+      return real ? (/^https?:\/\//i.test(real) ? real : `https://${real}`) : u.href;
+    } catch {
+      return null;
+    }
+  };
+  const sections = [...document.querySelectorAll('main section, [componentkey$="Featured"]')];
+  const sec = sections.find((s) => (s.getAttribute('componentkey') || '').endsWith('Featured') || s.querySelector('#featured') || /^\s*featured\s*$/im.test(s.querySelector('h2, h3')?.innerText || ''));
   if (!sec) return null;
   const seen = new Set();
   const items = [];
   for (const a of sec.querySelectorAll('a[href]')) {
-    if (!a.href || a.href.startsWith('javascript') || seen.has(a.href)) continue;
-    seen.add(a.href);
+    const url = a.href && !a.href.startsWith('javascript') ? outUrl(a.href) : null;
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
     const title = (a.innerText || a.getAttribute('aria-label') || '').trim().split('\n')[0].slice(0, 200);
-    let host = '';
-    try {
-      host = new URL(a.href).hostname;
-    } catch {
-      continue;
-    }
-    items.push({ title, url: a.href, external: !/(^|\.)linkedin\.com$/.test(host) && host !== location.hostname });
+    const host = new URL(url).hostname;
+    items.push({ title, url, external: !/(^|\.)linkedin\.com$/.test(host) && host !== location.hostname });
   }
   return { items };
 }
@@ -179,7 +219,8 @@ export function postDetails(sel) {
   post ||= document.querySelector('main') || document.body;
   const firstLine = (el) => ((el?.innerText || '').split('\n').map((s) => s.trim()).find(Boolean) || '');
   const actorEl = pick(sel.postActor, post);
-  const actorLink = post.querySelector('a[href*="/in/"], a[href*="/company/"]');
+  const links = [...post.querySelectorAll('a[href*="/in/"], a[href*="/company/"]')];
+  const actorLink = links.find((a) => firstLine(a)) || links[0] || null;
   const textEl = pick(sel.postText, post);
   const num = (s) => {
     const m = String(s).replace(/,/g, '').match(/([\d.]+)\s*([KkMm])?/);
@@ -199,18 +240,39 @@ export function postDetails(sel) {
     const others = post.innerText.match(/and ([\d,.]+[KkMm]?) others?/i);
     if (others) metrics.reactions = (num(others[1]) || 0) + 1;
   }
+  // 2026 layout (SDUI): the counts sit inside the Like, Comment and Repost buttons themselves;
+  // a zero is an empty (zero-width space) count. Read only, never clicked.
+  const count = (selector) => {
+    const b = post.querySelector(selector);
+    if (!b) return null;
+    const t = (b.innerText || '').replace(/[\u200B\s]+/g, ' ').trim();
+    return t ? num(t) : 0;
+  };
+  metrics.reactions ??= count('button[aria-label^="Reaction button state"]');
+  metrics.comments ??= count('button[aria-label="Comment"]');
+  metrics.reposts ??= count('button[aria-label="Repost"]');
+  const bestSrc = (i) => {
+    const set = (i.getAttribute('srcset') || '').split(',').map((x) => x.trim().split(/\s+/)).filter((x) => x[0]);
+    set.sort((a, b) => (parseInt(b[1], 10) || 0) - (parseInt(a[1], 10) || 0));
+    return set.length ? new URL(set[0][0], location.href).href : i.src;
+  };
   const images = [...post.querySelectorAll('img')]
-    .filter((i) => i.src && !i.src.startsWith('data:') && !i.closest('article, .comments-comment-item, .update-components-actor, [class*="actor"]'))
-    .filter((i) => (i.naturalWidth || i.width) >= 200 || /update-components-image|feed-shared-image|carousel/i.test(i.className + (i.parentElement?.className || '')))
-    .map((i) => i.src);
+    .filter((i) => i.src && !i.src.startsWith('data:') && !i.closest('article, .comments-comment-item, .update-components-actor, [class*="actor"], a[href*="/in/"], a[href*="/company/"]'))
+    .filter((i) => Math.max(i.naturalWidth, i.width, Number(i.getAttribute('width')) || 0) >= 200 || /update-components-image|feed-shared-image|carousel/i.test(i.className + (i.parentElement?.className || '')))
+    .map(bestSrc);
   const video = post.querySelector('video');
   const doc = post.querySelector('.update-components-document__container, iframe[title*="document" i]');
+  // SDUI: the date is a plain line under the actor ("Nov 13, 2022" or "2w").
+  const sduiDate = () => {
+    const DATE = /^(\d+\s*(s|m|h|d|w|mo|yr|y)\b|(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}\b)/i;
+    return [...post.querySelectorAll('p')].slice(1, 8).map((x) => (x.innerText || '').trim()).find((t) => DATE.test(t)) || '';
+  };
   return {
     urn: post.getAttribute('data-urn') || null,
     url: location.href,
     author: firstLine(actorEl) || firstLine(actorLink),
     authorUrl: actorLink ? actorLink.href.split('?')[0] : null,
-    date: firstLine(pick(sel.postDate, post)),
+    date: firstLine(pick(sel.postDate, post)) || sduiDate(),
     caption: (textEl?.innerText || '').trim(),
     metrics,
     media: {
@@ -364,7 +426,41 @@ export function activityPosts(sel) {
     const repost = /\breposted this\b/i.test((el.innerText || '').slice(0, 300));
     out.push({ urn: m[0], date, repost });
   }
+  if (out.length) return out;
+  // 2026 layout (SDUI): each post is a [role="listitem"] whose componentkey starts with
+  // "update-card-focus"; the post id is not in the page (only some posts link to it), so each
+  // card is marked for "Copy link to post". The date is a plain line: "Jun 17, 2023" or "2w".
+  const DATE = /^(\d+\s*(s|m|h|d|w|mo|yr|y)\b|(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}\b)/i;
+  const cards = document.querySelectorAll('[role="listitem"][componentkey^="update-card-focus"], [data-sdui-screen*="RecentActivity"] [role="list"] > [role="listitem"]');
+  for (const el of cards) {
+    if (!el.hasAttribute('data-alpha-post')) el.setAttribute('data-alpha-post', `p${document.querySelectorAll('[data-alpha-post]').length + 1}`);
+    const mark = el.getAttribute('data-alpha-post');
+    if (seen.has(mark)) continue;
+    seen.add(mark);
+    const link = [...el.querySelectorAll('a[href*="/feed/update/urn:li:"]')].map((a) => a.href.match(/urn:li:(activity|ugcPost|share):\d+/)).find(Boolean);
+    const lines = [...el.querySelectorAll('p')].slice(0, 8).map((x) => (x.innerText || '').trim());
+    const date = lines.slice(1).find((t) => DATE.test(t)) || '';
+    const repost = /\breposted this\b/i.test((el.innerText || '').slice(0, 300));
+    out.push({ urn: link ? link[0] : null, mark, date, repost });
+  }
   return out;
+}
+
+// Records links the page copies ("Copy link to post") without touching the real clipboard.
+export function watchCopies() {
+  if (window.__alphaCopies) return true;
+  window.__alphaCopies = [];
+  if (navigator.clipboard) navigator.clipboard.writeText = (t) => { window.__alphaCopies.push(String(t)); return Promise.resolve(); };
+  window.addEventListener('copy', (e) => {
+    const t = e.clipboardData?.getData('text/plain') || String(getSelection() || '');
+    if (t) window.__alphaCopies.push(t);
+  });
+  return true;
+}
+
+export function lastCopied() {
+  const list = window.__alphaCopies || [];
+  return list.length ? list[list.length - 1] : null;
 }
 
 export function groupResults() {

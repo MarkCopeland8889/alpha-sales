@@ -137,11 +137,13 @@ export function filterPeople(s, term, people) {
     system: SALES_ANALYST,
     prompt: `${business(s)}
 
-We searched LinkedIn people for "${term}" to find people who NEED our service. Many results are instead people who PROVIDE this service (competitors, freelancers, employees of firms like ours, recruiters for such roles).
+We searched LinkedIn people for "${term}" to find people who NEED our service. Most results are instead people who do this kind of work themselves.
 
-Below are ${people.length} search results exactly as LinkedIn showed them. Keep every person who does NOT appear to provide the service. Drop only the ones who clearly provide it. When unsure, keep them.
+Below are ${people.length} search results exactly as LinkedIn showed them. Return ALL that do not appear to provide the service.
 
-For each person you keep, add a short "intent" note: what in their result suggests they might need the service (or "unclear").
+Count as providing the service anyone whose title, headline, company or snippet shows they do this kind of work: owners and staff of firms that sell it, freelancers, consultants, fractional or outsourced roles, people employed in-house to do this work for their employer, students, trainees and job seekers in this field, and recruiters filling these roles. Drop them even when you cannot tell whether they sell it to outside clients: doing the work makes them a provider, not a buyer.
+
+Keep everyone whose work is something else, even when nothing yet shows they need us; later steps read their full profile. For each person you keep, add a short "intent" note: what in their result suggests they might need the service, or "no signal yet".
 
 ${people.map((p) => `[${p.id}] ${p.name}\n${p.text}`).join('\n\n')}
 

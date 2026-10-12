@@ -21,21 +21,24 @@ export async function readProfile(li, store, parts, person) {
     }
   }
 
-  // Expand "see more" (about, experience), scroll to the bottom so every section loads,
-  // expand again, then copy all the page text as is.
+  // Expand "see more" (about, experience), scroll to the bottom so every section loads (the
+  // 2026 layout only builds About and Activity once they scroll into view), expand again,
+  // then copy the text as is: the profile itself, and the whole page.
   await li.expandAll('main', 6);
   await li.scrollToEnd(10);
   await li.expandAll('main', 6);
-  const text = await li.evaluate(dom.pageText);
+  const text = await li.evaluate(dom.profileText);
   store.text([...parts, 'Profile text.txt'], text);
+  store.text([...parts, 'Page text.txt'], await li.evaluate(dom.pageText));
 
   const feat = await li.evaluate(dom.featured);
-  const websites = feat ? feat.items.filter((i) => i.external).map((i) => i.url) : [];
+  const websites = [...new Set([...(top.websites || []), ...(feat ? feat.items.filter((i) => i.external).map((i) => i.url) : [])])];
   if (feat) store.json([...parts, 'featured.json'], feat.items);
   if (websites.length) store.text([...parts, 'websites.txt'], `${websites.join('\n')}\n`);
 
   let postUrns = [];
-  if (s.collect_profile_posts && top.hasActivity) postUrns = await recentPosts(li, { ...person, slug });
+  const activity = top.hasActivity || (await li.evaluate(dom.hasActivity));
+  if (s.collect_profile_posts && activity) postUrns = await recentPosts(li, { ...person, slug });
   else if (s.collect_profile_posts) li.log.info(`${person.name} has no activity section`);
 
   return {
@@ -76,6 +79,25 @@ async function recentPosts(li, person) {
     li.log.warn(`Could not read post dates for ${person.name}; keeping the newest ${keep.length} posts`);
   }
   if (s.max_posts_per_profile > 0) keep = keep.slice(0, s.max_posts_per_profile);
-  li.log.info(`${person.name}: ${keep.length} posts in the last ${maxAge} days (of ${items.length} loaded)`);
-  return keep.map((p) => p.urn);
+  // Posts whose id is not on the page: three dots, "Copy link to post", as the workflow describes.
+  for (const p of keep) if (!p.urn && p.mark) p.urn = await copyPostLink(li, p.mark);
+  const urns = keep.map((p) => p.urn).filter(Boolean);
+  if (urns.length < keep.length) li.log.warn(`${person.name}: could not get the link of ${keep.length - urns.length} posts`);
+  li.log.info(`${person.name}: ${urns.length} posts in the last ${maxAge} days (of ${items.length} loaded)`);
+  return urns;
+}
+
+// Opens the post's "..." menu, clicks "Copy link to post" (a read-only menu item) and turns the
+// copied address (…/posts/name_words-activity-<id>-xyz or …/feed/update/urn:li:activity:<id>) into a post id.
+async function copyPostLink(li, mark) {
+  await li.evaluate(dom.watchCopies);
+  const before = await li.evaluate(dom.lastCopied);
+  const menu = await li.clickText({ scope: `[data-alpha-post="${mark}"]`, selectors: ['button'], ariaPattern: '^open control menu' });
+  if (!menu) return null;
+  await li.clickText({ selectors: ['[role="menuitem"]', '[role="option"]', '[role="menu"] li', '[role="menu"] button', '[role="menu"] a'], textPattern: '^copy link to post$' });
+  await li.pause(500, 1000);
+  const url = await li.evaluate(dom.lastCopied);
+  await li.closeDialog();
+  const m = url && url !== before ? url.match(/(activity|ugcPost|share)[-:](\d+)/) : null;
+  return m ? `urn:li:${m[1]}:${m[2]}` : null;
 }
